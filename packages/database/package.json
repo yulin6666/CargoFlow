@@ -1,0 +1,17 @@
+{
+  "name": "@cargoflow/database",
+  "version": "0.1.0",
+  "main": "./index.ts",
+  "scripts": {
+    "db:migrate": "prisma migrate dev",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.7.0"
+  },
+  "devDependencies": {
+    "prisma": "^5.7.0"
+  }
+}
