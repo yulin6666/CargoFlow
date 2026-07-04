@@ -11,7 +11,11 @@
       "Bash(docker exec:*)",
       "Bash(curl:*)",
       "Bash(kill 60179)",
-      "Bash(xargs kill:*)"
+      "Bash(xargs kill:*)",
+      "WebFetch(domain:docs.goshippo.com)",
+      "WebSearch",
+      "WebFetch(domain:goshippo.com)",
+      "Bash(docker ps:*)"
     ]
   }
 }

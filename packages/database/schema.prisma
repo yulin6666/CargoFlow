@@ -8,33 +8,19 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// 阶段 1: 最小化版本 - 只有核心字段
 model DemoShipment {
-  id            Int      @id @default(autoincrement())
-  fromAddress   String   @map("from_address")
-  toAddress     String   @map("to_address")
-  weight        Decimal  @db.Decimal(10, 2)
-  status        String   @default("draft") @db.VarChar(50)
-  quoteAmount   Decimal? @map("quote_amount") @db.Decimal(10, 2)
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id               Int      @id @default(autoincrement())
+  fromAddress      String   @map("from_address")
+  toAddress        String   @map("to_address")
+  weight           Decimal  @db.Decimal(10, 2)
+  status           String   @default("draft") @db.VarChar(50)
+  quoteAmount      Decimal? @map("quote_amount") @db.Decimal(10, 2)
+  shippoObjectId   String?  @map("shippo_object_id") @db.VarChar(100)
+  shippoRateId     String?  @map("shippo_rate_id") @db.VarChar(100)
+  trackingNumber   String?  @map("tracking_number") @db.VarChar(100)
+  shippoRates      Json?    @map("shippo_rates")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@map("demo_shipments")
 }
-
-// 阶段 2: 扩展字段（注释掉，后续启用）
-// model DemoShipment {
-//   id                  Int      @id @default(autoincrement())
-//   fromAddress         String   @map("from_address")
-//   toAddress           String   @map("to_address")
-//   weight              Decimal  @db.Decimal(10, 2)
-//   status              String   @default("draft") @db.VarChar(50)
-//   quoteAmount         Decimal? @map("quote_amount") @db.Decimal(10, 2)
-//   easypostShipmentId  String?  @map("easypost_shipment_id") @db.VarChar(100)
-//   trackingNumber      String?  @map("tracking_number") @db.VarChar(100)
-//   aiQuoteDetails      Json?    @map("ai_quote_details")
-//   createdAt           DateTime @default(now()) @map("created_at")
-//   updatedAt           DateTime @updatedAt @map("updated_at")
-//
-//   @@map("demo_shipments")
-// }

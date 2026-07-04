@@ -17,25 +17,68 @@
     },
     {
       "parameters": {
-        "jsCode": "// 获取输入数据（webhook POST 数据在 body 中）\nconst body = $input.first().json.body;\n\nconst fromAddress = body.fromAddress;\nconst toAddress = body.toAddress;\nconst weight = body.weight;\n\n// 简单的 mock 报价逻辑（基于重量）\nconst baseRate = 1.5; // 每磅 $1.5\nconst quoteAmount = parseFloat((weight * baseRate).toFixed(2));\n\n// 构造返回数据\nreturn {\n  success: true,\n  fromAddress: fromAddress,\n  toAddress: toAddress,\n  weight: weight,\n  quoteAmount: quoteAmount,\n  status: 'draft',\n  message: `Mock 报价已生成：从 ${fromAddress} 到 ${toAddress}，重量 ${weight} lbs`,\n  timestamp: new Date().toISOString()\n};"
+        "jsCode": "const body = $input.first().json.body;\n\nconst fromAddress = body.fromAddress || 'New York, NY';\nconst toAddress = body.toAddress || 'Los Angeles, CA';\nconst weight = Math.min(parseFloat(body.weight) || 5, 70); // UPS 上限 70lb\nconst dimensions = body.dimensions || { length: '10', width: '10', height: '10' };\n\n// 预设真实美国地址，按城市名匹配（Demo 用，保证 Shippo 能返回费率）\nconst ADDRESS_MAP = {\n  'new york':    { street1: '1 World Trade Center', city: 'New York',      state: 'NY', zip: '10007' },\n  'ny':          { street1: '1 World Trade Center', city: 'New York',      state: 'NY', zip: '10007' },\n  'los angeles': { street1: '200 N Spring St',      city: 'Los Angeles',   state: 'CA', zip: '90012' },\n  'la':          { street1: '200 N Spring St',      city: 'Los Angeles',   state: 'CA', zip: '90012' },\n  'chicago':     { street1: '121 N LaSalle St',     city: 'Chicago',       state: 'IL', zip: '60602' },\n  'houston':     { street1: '901 Bagby St',         city: 'Houston',       state: 'TX', zip: '77002' },\n  'phoenix':     { street1: '200 W Washington St',  city: 'Phoenix',       state: 'AZ', zip: '85003' },\n  'san francisco': { street1: '1 Dr Carlton B Goodlett Pl', city: 'San Francisco', state: 'CA', zip: '94102' },\n  'sf':          { street1: '1 Dr Carlton B Goodlett Pl', city: 'San Francisco', state: 'CA', zip: '94102' },\n  'seattle':     { street1: '600 4th Ave',          city: 'Seattle',       state: 'WA', zip: '98104' },\n  'miami':       { street1: '400 NW 2nd Ave',       city: 'Miami',         state: 'FL', zip: '33128' },\n  'dallas':      { street1: '1500 Marilla St',      city: 'Dallas',        state: 'TX', zip: '75201' },\n  'boston':      { street1: '1 City Hall Square',   city: 'Boston',        state: 'MA', zip: '02201' },\n};\n\nfunction resolveAddress(input) {\n  const key = input.toLowerCase().replace(/,.*$/, '').trim();\n  return ADDRESS_MAP[key] || ADDRESS_MAP['new york']; // 默认纽约\n}\n\nconst from = resolveAddress(fromAddress);\nconst to = resolveAddress(toAddress);\n\nreturn {\n  shippoPayload: {\n    address_from: { name: 'CargoFlow Sender', ...from, country: 'US' },\n    address_to:   { name: 'CargoFlow Recipient', ...to, country: 'US' },\n    parcels: [{\n      length: String(dimensions.length || '10'),\n      width:  String(dimensions.width  || '10'),\n      height: String(dimensions.height || '10'),\n      distance_unit: 'in',\n      weight: String(weight),\n      mass_unit: 'lb'\n    }],\n    async: false\n  },\n  fromAddress,\n  toAddress,\n  weight\n};"
       },
-      "id": "generate-quote-function",
-      "name": "Generate Mock Quote",
+      "id": "prepare-shippo-request",
+      "name": "Prepare Shippo Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [460, 300]
     },
     {
       "parameters": {
+        "method": "POST",
+        "url": "https://api.goshippo.com/shipments/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.shippoPayload) }}",
+        "options": {}
+      },
+      "id": "shippo-create-shipment",
+      "name": "Shippo - Create Shipment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "shippo-token-credentials",
+          "name": "Shippo Test Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 解析 Shippo 返回的 shipment 和 rates\nconst shippo = $input.first().json;\nconst prev = $input.first().json;\n\n// 取上一节点的原始入参（通过节点引用）\nconst fromAddress = $('Prepare Shippo Request').first().json.fromAddress;\nconst toAddress = $('Prepare Shippo Request').first().json.toAddress;\nconst weight = $('Prepare Shippo Request').first().json.weight;\n\nif (!shippo.object_id) {\n  throw new Error('Shippo API 返回异常: ' + JSON.stringify(shippo));\n}\n\n// rates 按价格排序，取最优\nconst rates = (shippo.rates || []).sort((a, b) => parseFloat(a.amount) - parseFloat(b.amount));\nconst bestRate = rates[0];\n\nif (!bestRate) {\n  throw new Error('Shippo 未返回任何费率，请检查地址是否有效');\n}\n\nconst quoteAmount = parseFloat(bestRate.amount);\n\nreturn {\n  fromAddress,\n  toAddress,\n  weight,\n  quoteAmount,\n  shippoObjectId: shippo.object_id,\n  shippoRateId: bestRate.object_id,\n  carrier: bestRate.provider,\n  serviceName: bestRate.servicelevel?.name || bestRate.servicelevel_name || '',\n  estimatedDays: bestRate.estimated_days,\n  allRates: rates.slice(0, 5).map(r => ({\n    rateId: r.object_id,\n    carrier: r.provider,\n    service: r.servicelevel?.name || '',\n    amount: parseFloat(r.amount),\n    currency: r.currency,\n    estimatedDays: r.estimated_days\n  })),\n  status: 'draft'\n};"
+      },
+      "id": "parse-shippo-rates",
+      "name": "Parse Shippo Rates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO demo_shipments (from_address, to_address, weight, status, quote_amount, created_at, updated_at)\nVALUES ('{{ $json.fromAddress }}', '{{ $json.toAddress }}', {{ $json.weight }}, 'draft', {{ $json.quoteAmount }}, NOW(), NOW())\nRETURNING *;",
+        "query": "INSERT INTO demo_shipments (from_address, to_address, weight, status, quote_amount, shippo_object_id, shippo_rate_id, shippo_rates, created_at, updated_at)\nVALUES ('{{ $json.fromAddress }}', '{{ $json.toAddress }}', {{ $json.weight }}, 'draft', {{ $json.quoteAmount }}, '{{ $json.shippoObjectId }}', '{{ $json.shippoRateId }}', '{{ JSON.stringify($json.allRates) }}'::jsonb, NOW(), NOW())\nRETURNING *;",
         "options": {}
       },
       "id": "postgres-insert",
       "name": "PostgreSQL",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
-      "position": [680, 300],
+      "position": [1120, 300],
       "credentials": {
         "postgres": {
           "id": "postgres-credentials",
@@ -45,13 +88,13 @@
     },
     {
       "parameters": {
-        "jsCode": "// 获取数据库插入结果\nconst dbResult = $input.first().json;\n\n// 整理返回给 NestJS 的数据\nreturn {\n  success: true,\n  shipmentId: dbResult.id,\n  quoteAmount: parseFloat(dbResult.quote_amount),\n  fromAddress: dbResult.from_address,\n  toAddress: dbResult.to_address,\n  weight: parseFloat(dbResult.weight),\n  status: dbResult.status,\n  message: '报价生成成功！订单已创建。',\n  createdAt: dbResult.created_at\n};"
+        "jsCode": "const dbResult = $input.first().json;\nconst rates = $('Parse Shippo Rates').first().json;\n\nreturn {\n  success: true,\n  shipmentId: dbResult.id,\n  quoteAmount: parseFloat(dbResult.quote_amount),\n  fromAddress: dbResult.from_address,\n  toAddress: dbResult.to_address,\n  weight: parseFloat(dbResult.weight),\n  status: dbResult.status,\n  shippoObjectId: dbResult.shippo_object_id,\n  carrier: rates.carrier,\n  serviceName: rates.serviceName,\n  estimatedDays: rates.estimatedDays,\n  allRates: rates.allRates,\n  message: `报价已生成：${rates.carrier} ${rates.serviceName}，$${rates.quoteAmount}，预计 ${rates.estimatedDays} 天`,\n  createdAt: dbResult.created_at\n};"
       },
       "id": "format-response",
       "name": "Format Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [900, 300]
+      "position": [1340, 300]
     },
     {
       "parameters": {
@@ -63,53 +106,27 @@
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1120, 300]
+      "position": [1560, 300]
     }
   ],
   "connections": {
     "Webhook": {
-      "main": [
-        [
-          {
-            "node": "Generate Mock Quote",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Prepare Shippo Request", "type": "main", "index": 0 }]]
     },
-    "Generate Mock Quote": {
-      "main": [
-        [
-          {
-            "node": "PostgreSQL",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+    "Prepare Shippo Request": {
+      "main": [[{ "node": "Shippo - Create Shipment", "type": "main", "index": 0 }]]
+    },
+    "Shippo - Create Shipment": {
+      "main": [[{ "node": "Parse Shippo Rates", "type": "main", "index": 0 }]]
+    },
+    "Parse Shippo Rates": {
+      "main": [[{ "node": "PostgreSQL", "type": "main", "index": 0 }]]
     },
     "PostgreSQL": {
-      "main": [
-        [
-          {
-            "node": "Format Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Format Response", "type": "main", "index": 0 }]]
     },
     "Format Response": {
-      "main": [
-        [
-          {
-            "node": "Respond to Webhook",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
     }
   },
   "pinData": {},
@@ -120,5 +137,5 @@
   "tags": [],
   "triggerCount": 0,
   "updatedAt": "2026-07-04T00:00:00.000Z",
-  "versionId": "1"
+  "versionId": "2"
 }

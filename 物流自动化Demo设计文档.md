@@ -41,7 +41,7 @@
 │  └─────────────┘                                │
 └─────────────────────────────────────────────────┘
          │
-         ├─── EasyPost (物流 API - sandbox)
+         ├─── Shippo (物流 API - test mode)
          ├─── Stripe (支付 - test mode)
          ├─── SendGrid (邮件通知)
          ├─── Twilio (SMS 通知)
@@ -64,43 +64,90 @@
 
 ## 系统集成方案
 
-### 1. EasyPost（物流数据核心）
+### 1. Shippo（物流数据核心）
 
 **选择原因：**
-- 有完善的 sandbox 测试环境
-- 真实 API 调用，支持创建 shipment 和 tracking
-- 可通过 API 手动推进状态（测试专用功能）
-- 注册即得测试 key，无需审批
+- 有完善的 test mode（token 前缀 `shippo_test_`）
+- 真实 API 调用，支持创建 shipment、购买 label 和 tracking
+- 注册即得 test token，在 [portal.goshippo.com/api-keys](https://portal.goshippo.com/api-keys) 获取，无需审批
+- 支持 USPS、UPS、FedEx 等多承运商费率比价
+- 文档：[docs.goshippo.com](https://docs.goshippo.com)
+
+**获取 Test API Key：**
+1. 注册 [goshippo.com](https://goshippo.com)
+2. 进入 [portal.goshippo.com/api-keys](https://portal.goshippo.com/api-keys)
+3. 复制 **Test Token**（格式：`shippo_test_xxxxxxxx...`）
 
 **集成方式：**
 ```javascript
-// n8n HTTP Request node
-POST https://api.easypost.com/v2/shipments
-Authorization: Bearer EZAK_test_xxxxx
+// n8n HTTP Request node - 创建 shipment 并获取费率
+POST https://api.goshippo.com/shipments/
+Authorization: ShippoToken shippo_test_xxxxx
+Content-Type: application/json
 
 {
-  "shipment": {
-    "to_address": {...},
-    "from_address": {...},
-    "parcel": {...}
-  }
+  "address_from": {
+    "name": "Sender Name",
+    "street1": "215 Clayton St",
+    "city": "San Francisco",
+    "state": "CA",
+    "zip": "94117",
+    "country": "US"
+  },
+  "address_to": {
+    "name": "Recipient Name",
+    "street1": "965 Mission St",
+    "city": "San Francisco",
+    "state": "CA",
+    "zip": "94103",
+    "country": "US"
+  },
+  "parcels": [{
+    "length": "5",
+    "width": "5",
+    "height": "5",
+    "distance_unit": "in",
+    "weight": "2",
+    "mass_unit": "lb"
+  }],
+  "async": false
 }
 ```
 
-**状态推进：**
-```bash
-# 手动触发状态变更（sandbox 独有）
-POST /v2/trackers
+**购买 Label（test mode）：**
+```javascript
+// 从 shipment.rates 中选择一个 rate_id 购买
+POST https://api.goshippo.com/transactions/
+Authorization: ShippoToken shippo_test_xxxxx
+
 {
-  "tracker": {
-    "tracking_code": "EZ1000000001",
-    "carrier": "USPS"
-  }
+  "rate": "<rate_object_id>",
+  "label_file_type": "PDF",
+  "async": false
+}
+// 返回: tracking_number, label_url
+```
+
+**状态追踪（创建 tracker）：**
+```javascript
+// 通过 tracking number 创建 tracker
+POST https://api.goshippo.com/tracks/
+Authorization: ShippoToken shippo_test_xxxxx
+
+{
+  "carrier": "usps",
+  "tracking_number": "9205590164917312751089"
 }
 ```
 
-每次调用自动推进到下一状态：
-`pre_transit → in_transit → out_for_delivery → delivered`
+**Test mode 特殊 tracking number（自动模拟状态流转）：**
+- `SHIPPO_TRANSIT` → 直接进入 in_transit 状态
+- `SHIPPO_DELIVERED` → 直接进入 delivered 状态
+- `SHIPPO_RETURNED` → 模拟退件
+- `SHIPPO_FAILURE` → 模拟投递失败
+
+每次轮询自动推进：
+`UNKNOWN → PRE_TRANSIT → TRANSIT → DELIVERED`
 
 ---
 
@@ -196,7 +243,8 @@ CREATE TABLE demo_tokens (
 CREATE TABLE demo_shipments (
     id SERIAL PRIMARY KEY,
     token_code VARCHAR(20) REFERENCES demo_tokens(code),
-    easypost_shipment_id VARCHAR(100),     -- EasyPost 返回的 ID
+    shippo_object_id VARCHAR(100),         -- Shippo shipment object ID
+    shippo_rate_id VARCHAR(100),           -- 选中的费率 ID
     tracking_number VARCHAR(100),
     from_address JSONB,
     to_address JSONB,
@@ -286,7 +334,7 @@ def generate_demo_token():
 │  └──────────────────────────────────────────┘ │
 │  ┌──────────────────────────────────────────┐ │
 │  │ #ORD-002  NYC → Miami                   │ │
-│  │ 状态：运输中  Tracking: EZ1000000002    │ │
+│  │ 状态：运输中  Tracking: SHIPPO_TRANSIT  │ │
 │  │ [推进到下一状态] [查看详情]             │ │
 │  └──────────────────────────────────────────┘ │
 │                                                │
@@ -317,7 +365,7 @@ Next.js 调用 NestJS API: POST /api/quotes
   ↓
 NestJS 调用 n8n webhook: POST http://localhost:5678/webhook/generate-quote
   ↓
-n8n workflow: OpenAI 生成报价 → EasyPost 创建 shipment → 写入数据库
+n8n workflow: OpenAI 生成报价 → Shippo 比价获取费率 → 写入数据库
   ↓
 NestJS 返回报价结果给前端
   ↓
@@ -343,9 +391,9 @@ Dashboard 轮询或SSE刷新状态
 ```
 用户点击"推进到下一状态"
   ↓
-NestJS API 调用 EasyPost API 更新 tracker
+NestJS API 调用 Shippo API 查询 tracker 状态
   ↓
-EasyPost webhook → n8n (需要ngrok)
+Shippo webhook → n8n (需要ngrok)
   ↓
 n8n: SMS/Email 通知 + HubSpot 更新 + 写日志
   ↓
@@ -394,13 +442,17 @@ Webhook Trigger (POST /webhook/generate-quote)
   ↓
 Extract shipment details
   ↓
-OpenAI Node (生成报价)
+OpenAI Node (生成报价建议)
   ↓
-EasyPost Node (创建 draft shipment)
+HTTP Request Node (Shippo API - 创建 shipment 获取真实费率)
+  POST https://api.goshippo.com/shipments/
+  Authorization: ShippoToken shippo_test_xxxxx
   ↓
-PostgreSQL (保存到 demo_shipments)
+Function Node (解析 rates，选最优价格)
   ↓
-Return response
+PostgreSQL (保存到 demo_shipments，含 shippo_object_id + rates)
+  ↓
+Respond to Webhook (返回 AI 推荐 + 实际费率列表)
 ```
 
 **Workflow 2: Payment Processing**
@@ -418,12 +470,12 @@ Log to automation_logs
 
 **Workflow 3: Status Update Automation**
 ```
-EasyPost Webhook Trigger (tracker.updated)
+Shippo Webhook Trigger (tracking_updated)
   ↓
-Switch Node (根据状态分支)
-  ├─ in_transit → Twilio SMS + Email
-  ├─ out_for_delivery → Twilio SMS
-  └─ delivered → Twilio SMS + Email + HubSpot update
+Switch Node (根据 tracking_status.status 分支)
+  ├─ TRANSIT → Twilio SMS + Email
+  ├─ OUT_FOR_DELIVERY → Twilio SMS
+  └─ DELIVERED → Twilio SMS + Email + HubSpot update
   ↓
 PostgreSQL (更新 shipment status)
   ↓
@@ -498,7 +550,7 @@ app.enableCors({
 ### 🔴 高难度
 
 **1. Webhook 本地回调问题**
-- **问题：** Stripe、EasyPost 的 webhook 需要公网可访问 URL
+- **问题：** Stripe、Shippo 的 webhook 需要公网可访问 URL
 - **临时方案：** 用 ngrok 暴露本地端口
   ```bash
   ngrok http 3001
@@ -517,7 +569,7 @@ app.enableCors({
 - **问题：** 6 个外部服务，每个有不同的认证、限额、错误码
 - **解决：**
   - **优先级分级：**
-    - P0: OpenAI（AI报价）、EasyPost（物流核心）
+    - P0: OpenAI（AI报价）、Shippo（物流核心）
     - P1: Stripe（支付）
     - P2: SendGrid（邮件）、HubSpot（CRM）
     - P3: Twilio（SMS，trial限制多）
@@ -681,7 +733,7 @@ Respond to Webhook (返回报价结果)
 - [ ] 数据写入数据库
 
 **不做的事情：**
-- ❌ 不接入真实 API（OpenAI、EasyPost）
+- ❌ 不接入真实 API（OpenAI、Shippo）
 - ❌ 不做支付流程
 - ❌ 不做实时日志
 
@@ -696,9 +748,9 @@ Respond to Webhook (返回报价结果)
    - 注册获取 API key
    - 配置到 n8n 环境变量
 
-2. **EasyPost**（必需）
-   - 注册 sandbox 账号
-   - 获取测试 key：`EZAK_test_xxxxx`
+2. **Shippo**（必需）
+   - 注册 [goshippo.com](https://goshippo.com)
+   - 获取 test token：`shippo_test_xxxxx`（在 portal.goshippo.com/api-keys）
 
 3. **Stripe**（推荐）
    - 注册 test mode
@@ -707,7 +759,8 @@ Respond to Webhook (返回报价结果)
 **完善数据库：**
 ```sql
 -- 添加完整字段
-ALTER TABLE demo_shipments ADD COLUMN easypost_shipment_id VARCHAR(100);
+ALTER TABLE demo_shipments ADD COLUMN shippo_object_id VARCHAR(100);
+ALTER TABLE demo_shipments ADD COLUMN shippo_rate_id VARCHAR(100);
 ALTER TABLE demo_shipments ADD COLUMN tracking_number VARCHAR(100);
 ALTER TABLE demo_shipments ADD COLUMN ai_quote_details JSONB;
 
@@ -738,11 +791,14 @@ CREATE TABLE automation_logs (
 ```
 Webhook Trigger
   ↓
-OpenAI Node (调用 GPT-4，生成报价)
+OpenAI Node (调用 GPT-4，生成承运商推荐)
   ↓
-EasyPost Node (创建 draft shipment)
+HTTP Request Node (Shippo API - POST https://api.goshippo.com/shipments/)
+  Authorization: ShippoToken shippo_test_xxxxx
   ↓
-PostgreSQL (保存完整数据)
+Function Node (解析 rates 列表，选最优价格)
+  ↓
+PostgreSQL (保存完整数据，含 shippo_object_id + rates)
   ↓
 Respond to Webhook
 ```
@@ -777,7 +833,7 @@ PostgreSQL (更新 shipment + 写 automation_logs)
 
 **验收标准：**
 - [ ] AI 报价返回真实价格和建议
-- [ ] EasyPost 创建 shipment 成功
+- [ ] Shippo 创建 shipment 并返回费率成功
 - [ ] Stripe 支付流程可走通（test mode）
 - [ ] 手动推进状态触发日志记录
 - [ ] 前端显示完整订单流程
@@ -821,21 +877,21 @@ ngrok http 3001
 
 # 获得公网 URL，配置到：
 # - Stripe webhook endpoint
-# - EasyPost webhook endpoint
+# - Shippo webhook endpoint（在 portal.goshippo.com/webhooks 配置）
 ```
 
 **完整 Workflow 3：**
 ```
-EasyPost Webhook Trigger (tracker.updated)
+Shippo Webhook Trigger (tracking_updated)
   ↓
-Switch Node (根据状态分支)
-  ├─ in_transit
+Switch Node (根据 tracking_status.status 分支)
+  ├─ TRANSIT
   │   ├─ Twilio SMS
   │   ├─ SendGrid Email
   │   └─ HubSpot 更新 Deal
-  ├─ out_for_delivery
+  ├─ OUT_FOR_DELIVERY
   │   └─ Twilio SMS
-  └─ delivered
+  └─ DELIVERED
       ├─ Twilio SMS + Email
       └─ HubSpot 更新 Deal 状态为 Won
   ↓
@@ -869,7 +925,7 @@ PostgreSQL (写日志)
 | 模块 | 工作量 | 说明 |
 |------|--------|------|
 | 阶段 0-1 | 15h | 见上 |
-| 第三方 API 注册 | 3h | OpenAI + EasyPost + Stripe |
+| 第三方 API 注册 | 3h | OpenAI + Shippo + Stripe |
 | 完整数据库 | 2h | 3 张表 + 完整字段 |
 | NestJS 功能完善 | 6h | 测试码验证、订单管理 API |
 | Next.js 功能完善 | 6h | 订单列表、状态推进、日志展示 |
