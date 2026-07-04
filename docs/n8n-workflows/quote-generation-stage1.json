@@ -1,0 +1,124 @@
+{
+  "name": "Quote Generation - Stage 1",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-quote",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "generate-quote"
+    },
+    {
+      "parameters": {
+        "functionCode": "// 获取输入数据\nconst { fromAddress, toAddress, weight } = $input.item.json;\n\n// 简单的 mock 报价逻辑（基于重量）\nconst baseRate = 1.5; // 每磅 $1.5\nconst quoteAmount = (weight * baseRate).toFixed(2);\n\n// 构造返回数据\nconst result = {\n  success: true,\n  shipmentId: null, // 将由数据库生成\n  quoteAmount: parseFloat(quoteAmount),\n  fromAddress,\n  toAddress,\n  weight,\n  status: 'draft',\n  message: `Mock 报价已生成：从 ${fromAddress} 到 ${toAddress}，重量 ${weight} lbs`,\n  timestamp: new Date().toISOString(),\n};\n\nreturn { json: result };"
+      },
+      "id": "generate-quote-function",
+      "name": "Generate Mock Quote",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO demo_shipments (from_address, to_address, weight, status, quote_amount, created_at, updated_at)\nVALUES ('{{ $json.fromAddress }}', '{{ $json.toAddress }}', {{ $json.weight }}, '{{ $json.status }}', {{ $json.quoteAmount }}, NOW(), NOW())\nRETURNING *;",
+        "options": {}
+      },
+      "id": "postgres-insert",
+      "name": "PostgreSQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [680, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// 获取数据库插入结果\nconst dbResult = $input.item.json;\n\n// 整理返回给 NestJS 的数据\nreturn {\n  json: {\n    success: true,\n    shipmentId: dbResult.id,\n    quoteAmount: parseFloat(dbResult.quote_amount),\n    fromAddress: dbResult.from_address,\n    toAddress: dbResult.to_address,\n    weight: parseFloat(dbResult.weight),\n    status: dbResult.status,\n    message: '报价生成成功！订单已创建。',\n    createdAt: dbResult.created_at,\n  },\n};"
+      },
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond-to-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Generate Mock Quote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Mock Quote": {
+      "main": [
+        [
+          {
+            "node": "PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PostgreSQL": {
+      "main": [
+        [
+          {
+            "node": "Format Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-07-04T00:00:00.000Z",
+  "versionId": "1"
+}
