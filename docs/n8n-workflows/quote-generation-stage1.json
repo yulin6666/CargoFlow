@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// 获取输入数据\nconst { fromAddress, toAddress, weight } = $input.item.json;\n\n// 简单的 mock 报价逻辑（基于重量）\nconst baseRate = 1.5; // 每磅 $1.5\nconst quoteAmount = (weight * baseRate).toFixed(2);\n\n// 构造返回数据\nconst result = {\n  success: true,\n  shipmentId: null, // 将由数据库生成\n  quoteAmount: parseFloat(quoteAmount),\n  fromAddress,\n  toAddress,\n  weight,\n  status: 'draft',\n  message: `Mock 报价已生成：从 ${fromAddress} 到 ${toAddress}，重量 ${weight} lbs`,\n  timestamp: new Date().toISOString(),\n};\n\nreturn result;"
+        "jsCode": "// 获取输入数据\nconst inputData = $input.first().json;\nconst fromAddress = inputData.fromAddress;\nconst toAddress = inputData.toAddress;\nconst weight = inputData.weight;\n\n// 简单的 mock 报价逻辑（基于重量）\nconst baseRate = 1.5; // 每磅 $1.5\nconst quoteAmount = parseFloat((weight * baseRate).toFixed(2));\n\n// 构造返回数据\nreturn {\n  success: true,\n  fromAddress: fromAddress,\n  toAddress: toAddress,\n  weight: weight,\n  quoteAmount: quoteAmount,\n  status: 'draft',\n  message: `Mock 报价已生成：从 ${fromAddress} 到 ${toAddress}，重量 ${weight} lbs`,\n  timestamp: new Date().toISOString()\n};"
       },
       "id": "generate-quote-function",
       "name": "Generate Mock Quote",
@@ -45,7 +45,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// 获取数据库插入结果\nconst dbResult = $input.item.json;\n\n// 整理返回给 NestJS 的数据\nreturn {\n  success: true,\n  shipmentId: dbResult.id,\n  quoteAmount: parseFloat(dbResult.quote_amount),\n  fromAddress: dbResult.from_address,\n  toAddress: dbResult.to_address,\n  weight: parseFloat(dbResult.weight),\n  status: dbResult.status,\n  message: '报价生成成功！订单已创建。',\n  createdAt: dbResult.created_at,\n};"
+        "jsCode": "// 获取数据库插入结果\nconst dbResult = $input.first().json;\n\n// 整理返回给 NestJS 的数据\nreturn {\n  success: true,\n  shipmentId: dbResult.id,\n  quoteAmount: parseFloat(dbResult.quote_amount),\n  fromAddress: dbResult.from_address,\n  toAddress: dbResult.to_address,\n  weight: parseFloat(dbResult.weight),\n  status: dbResult.status,\n  message: '报价生成成功！订单已创建。',\n  createdAt: dbResult.created_at\n};"
       },
       "id": "format-response",
       "name": "Format Response",
