@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// 获取输入数据\nconst inputData = $input.first().json;\nconst fromAddress = inputData.fromAddress;\nconst toAddress = inputData.toAddress;\nconst weight = inputData.weight;\n\n// 简单的 mock 报价逻辑（基于重量）\nconst baseRate = 1.5; // 每磅 $1.5\nconst quoteAmount = parseFloat((weight * baseRate).toFixed(2));\n\n// 构造返回数据\nreturn {\n  success: true,\n  fromAddress: fromAddress,\n  toAddress: toAddress,\n  weight: weight,\n  quoteAmount: quoteAmount,\n  status: 'draft',\n  message: `Mock 报价已生成：从 ${fromAddress} 到 ${toAddress}，重量 ${weight} lbs`,\n  timestamp: new Date().toISOString()\n};"
+        "jsCode": "// 获取输入数据（webhook POST 数据在 body 中）\nconst body = $input.first().json.body;\n\nconst fromAddress = body.fromAddress;\nconst toAddress = body.toAddress;\nconst weight = body.weight;\n\n// 简单的 mock 报价逻辑（基于重量）\nconst baseRate = 1.5; // 每磅 $1.5\nconst quoteAmount = parseFloat((weight * baseRate).toFixed(2));\n\n// 构造返回数据\nreturn {\n  success: true,\n  fromAddress: fromAddress,\n  toAddress: toAddress,\n  weight: weight,\n  quoteAmount: quoteAmount,\n  status: 'draft',\n  message: `Mock 报价已生成：从 ${fromAddress} 到 ${toAddress}，重量 ${weight} lbs`,\n  timestamp: new Date().toISOString()\n};"
       },
       "id": "generate-quote-function",
       "name": "Generate Mock Quote",
