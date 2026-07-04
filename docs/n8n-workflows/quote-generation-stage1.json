@@ -1,5 +1,5 @@
 {
-  "name": "Quote Generation - Stage 1",
+  "name": "CargoFlow - Quote Generation",
   "nodes": [
     {
       "parameters": {
