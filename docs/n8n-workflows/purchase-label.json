@@ -1,0 +1,187 @@
+{
+  "name": "CargoFlow - Purchase Label",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "purchase-label",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "purchase-label"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst shipmentId = body.shipmentId;\nconst rateId = body.rateId || body.shippoRateId;\n\nif (!shipmentId || !rateId) {\n  throw new Error('缺少必要参数: shipmentId 和 rateId');\n}\n\nreturn { shipmentId, rateId };"
+      },
+      "id": "validate-input",
+      "name": "Validate Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, shippo_object_id, shippo_rate_id, status FROM demo_shipments WHERE id = {{ $json.shipmentId }} LIMIT 1;",
+        "options": {}
+      },
+      "id": "get-shipment",
+      "name": "Get Shipment",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [680, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const shipment = $input.first().json;\nconst input = $('Validate Input').first().json;\n\nif (!shipment || !shipment.shippo_object_id) {\n  throw new Error('订单不存在或未生成报价');\n}\n\nif (shipment.status !== 'draft' && shipment.status !== 'pending_payment') {\n  throw new Error('订单状态不允许购买 label，当前状态: ' + shipment.status);\n}\n\nreturn {\n  shipmentId: shipment.id,\n  shippoObjectId: shipment.shippo_object_id,\n  rateId: input.rateId || shipment.shippo_rate_id\n};"
+      },
+      "id": "validate-shipment",
+      "name": "Validate Shipment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.goshippo.com/transactions/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ rate: $json.rateId, label_file_type: 'PDF', async: false, metadata: 'shipment_' + $json.shipmentId }) }}",
+        "options": {}
+      },
+      "id": "shippo-purchase-label",
+      "name": "Shippo - Purchase Label",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "shippo-token-credentials",
+          "name": "Shippo Test Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const transaction = $input.first().json;\nconst prev = $('Validate Shipment').first().json;\n\nif (transaction.status !== 'SUCCESS') {\n  throw new Error('购买 label 失败: ' + JSON.stringify(transaction.messages));\n}\n\nconst trackingNumber = transaction.tracking_number;\nconst labelUrl = transaction.label_url;\nconst trackingUrl = transaction.tracking_url_provider;\n\nreturn {\n  shipmentId: prev.shipmentId,\n  trackingNumber,\n  labelUrl,\n  trackingUrl,\n  transactionId: transaction.object_id,\n  carrier: transaction.rate?.provider || 'Unknown',\n  serviceName: transaction.rate?.servicelevel?.name || '',\n  amount: parseFloat(transaction.rate?.amount || 0)\n};"
+      },
+      "id": "parse-transaction",
+      "name": "Parse Transaction",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE demo_shipments SET status = 'label_purchased', tracking_number = '{{ $json.trackingNumber }}', label_url = '{{ $json.labelUrl }}', tracking_url = '{{ $json.trackingUrl }}', carrier = '{{ $json.carrier }}', service_name = '{{ $json.serviceName }}', quote_amount = {{ $json.amount }}, updated_at = NOW() WHERE id = {{ $json.shipmentId }} RETURNING *;",
+        "options": {}
+      },
+      "id": "update-shipment",
+      "name": "Update Shipment",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1560, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO automation_logs (shipment_id, action_type, details, created_at) VALUES ({{ $json.id }}, 'label_purchased', '{\"tracking_number\": \"{{ $('Parse Transaction').first().json.trackingNumber }}\", \"carrier\": \"{{ $('Parse Transaction').first().json.carrier }}\"}'::jsonb, NOW());",
+        "options": {}
+      },
+      "id": "log-action",
+      "name": "Log Action",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1780, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const shipment = $input.first().json;\nconst transaction = $('Parse Transaction').first().json;\n\nreturn {\n  success: true,\n  shipmentId: shipment.id,\n  status: shipment.status,\n  trackingNumber: transaction.trackingNumber,\n  labelUrl: transaction.labelUrl,\n  trackingUrl: transaction.trackingUrl,\n  carrier: transaction.carrier,\n  serviceName: transaction.serviceName,\n  message: `Label 购买成功！Tracking: ${transaction.trackingNumber}`\n};"
+      },
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond-to-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2220, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Validate Input", "type": "main", "index": 0 }]]
+    },
+    "Validate Input": {
+      "main": [[{ "node": "Get Shipment", "type": "main", "index": 0 }]]
+    },
+    "Get Shipment": {
+      "main": [[{ "node": "Validate Shipment", "type": "main", "index": 0 }]]
+    },
+    "Validate Shipment": {
+      "main": [[{ "node": "Shippo - Purchase Label", "type": "main", "index": 0 }]]
+    },
+    "Shippo - Purchase Label": {
+      "main": [[{ "node": "Parse Transaction", "type": "main", "index": 0 }]]
+    },
+    "Parse Transaction": {
+      "main": [[{ "node": "Update Shipment", "type": "main", "index": 0 }]]
+    },
+    "Update Shipment": {
+      "main": [[{ "node": "Log Action", "type": "main", "index": 0 }]]
+    },
+    "Log Action": {
+      "main": [[{ "node": "Format Response", "type": "main", "index": 0 }]]
+    },
+    "Format Response": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-07-04T08:30:00.000Z",
+  "versionId": "1"
+}

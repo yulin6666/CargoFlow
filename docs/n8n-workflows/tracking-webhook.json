@@ -1,0 +1,265 @@
+{
+  "name": "CargoFlow - Tracking Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "shippo-tracking-webhook",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 400],
+      "webhookId": "shippo-tracking-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst event = body.event || body;\n\n// Shippo webhook payload 结构\nconst trackingStatus = event.data || event.tracking_status || event;\nconst trackingNumber = trackingStatus.tracking_number;\nconst status = trackingStatus.status;\nconst substatus = trackingStatus.substatus?.text || '';\nconst carrier = trackingStatus.carrier;\nconst eta = trackingStatus.eta;\n\nif (!trackingNumber) {\n  throw new Error('Webhook payload 缺少 tracking_number');\n}\n\nreturn {\n  trackingNumber,\n  status,\n  substatus,\n  carrier,\n  eta,\n  trackingHistory: trackingStatus.tracking_history || [],\n  location: trackingStatus.location || {},\n  rawPayload: event\n};"
+      },
+      "id": "parse-webhook",
+      "name": "Parse Webhook",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, status, from_address, to_address, tracking_number FROM demo_shipments WHERE tracking_number = '{{ $json.trackingNumber }}' LIMIT 1;",
+        "options": {}
+      },
+      "id": "find-shipment",
+      "name": "Find Shipment",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [680, 400],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const shipment = $input.first().json;\nconst webhook = $('Parse Webhook').first().json;\n\nif (!shipment || !shipment.id) {\n  // 订单不存在，记录日志但不报错\n  return {\n    shipmentFound: false,\n    trackingNumber: webhook.trackingNumber,\n    status: webhook.status,\n    message: '订单未找到，可能是外部 tracking number'\n  };\n}\n\nreturn {\n  shipmentFound: true,\n  shipmentId: shipment.id,\n  trackingNumber: webhook.trackingNumber,\n  newStatus: webhook.status,\n  substatus: webhook.substatus,\n  oldStatus: shipment.status,\n  fromAddress: shipment.from_address,\n  toAddress: shipment.to_address\n};"
+      },
+      "id": "check-shipment",
+      "name": "Check Shipment",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.shipmentFound }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-shipment-found",
+      "name": "If Shipment Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE demo_shipments SET tracking_status = '{{ $json.newStatus }}', status = CASE WHEN '{{ $json.newStatus }}' = 'DELIVERED' THEN 'delivered' WHEN '{{ $json.newStatus }}' IN ('TRANSIT', 'OUT_FOR_DELIVERY') THEN 'in_transit' ELSE status END, updated_at = NOW() WHERE id = {{ $json.shipmentId }} RETURNING *;",
+        "options": {}
+      },
+      "id": "update-shipment-status",
+      "name": "Update Shipment Status",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1340, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO automation_logs (shipment_id, action_type, details, created_at) VALUES ({{ $json.id }}, 'tracking_updated', '{\"status\": \"{{ $('Check Shipment').first().json.newStatus }}\", \"substatus\": \"{{ $('Check Shipment').first().json.substatus }}\"}'::jsonb, NOW());",
+        "options": {}
+      },
+      "id": "log-tracking-update",
+      "name": "Log Tracking Update",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1560, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $('Check Shipment').first().json.newStatus }}",
+              "operation": "equals",
+              "value2": "DELIVERED"
+            }
+          ]
+        }
+      },
+      "id": "if-delivered",
+      "name": "If Delivered",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO automation_logs (shipment_id, action_type, details, success, created_at) VALUES ({{ $('Update Shipment Status').first().json.id }}, 'notification_delivered', '{\"message\": \"货物已送达\", \"tracking_number\": \"{{ $('Check Shipment').first().json.trackingNumber }}\"}'::jsonb, true, NOW());",
+        "options": {}
+      },
+      "id": "log-delivered-notification",
+      "name": "Log Delivered Notification",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [2000, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $('Check Shipment').first().json.newStatus }}",
+              "operation": "equals",
+              "value2": "TRANSIT"
+            }
+          ]
+        }
+      },
+      "id": "if-in-transit",
+      "name": "If In Transit",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1780, 400]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO automation_logs (shipment_id, action_type, details, success, created_at) VALUES ({{ $('Update Shipment Status').first().json.id }}, 'notification_in_transit', '{\"message\": \"货物运输中\", \"tracking_number\": \"{{ $('Check Shipment').first().json.trackingNumber }}\"}'::jsonb, true, NOW());",
+        "options": {}
+      },
+      "id": "log-transit-notification",
+      "name": "Log Transit Notification",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [2000, 400],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO automation_logs (shipment_id, action_type, details, success, created_at) VALUES (NULL, 'webhook_received_unknown', '{\"tracking_number\": \"{{ $json.trackingNumber }}\", \"status\": \"{{ $json.status }}\"}'::jsonb, true, NOW());",
+        "options": {}
+      },
+      "id": "log-unknown-tracking",
+      "name": "Log Unknown Tracking",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1340, 500],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"message\": \"Webhook processed\" } }}",
+        "options": {}
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2220, 400]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Parse Webhook", "type": "main", "index": 0 }]]
+    },
+    "Parse Webhook": {
+      "main": [[{ "node": "Find Shipment", "type": "main", "index": 0 }]]
+    },
+    "Find Shipment": {
+      "main": [[{ "node": "Check Shipment", "type": "main", "index": 0 }]]
+    },
+    "Check Shipment": {
+      "main": [[{ "node": "If Shipment Found", "type": "main", "index": 0 }]]
+    },
+    "If Shipment Found": {
+      "main": [
+        [{ "node": "Update Shipment Status", "type": "main", "index": 0 }],
+        [{ "node": "Log Unknown Tracking", "type": "main", "index": 0 }]
+      ]
+    },
+    "Update Shipment Status": {
+      "main": [[{ "node": "Log Tracking Update", "type": "main", "index": 0 }]]
+    },
+    "Log Tracking Update": {
+      "main": [[
+        { "node": "If Delivered", "type": "main", "index": 0 },
+        { "node": "If In Transit", "type": "main", "index": 0 }
+      ]]
+    },
+    "If Delivered": {
+      "main": [[{ "node": "Log Delivered Notification", "type": "main", "index": 0 }]]
+    },
+    "If In Transit": {
+      "main": [[{ "node": "Log Transit Notification", "type": "main", "index": 0 }]]
+    },
+    "Log Delivered Notification": {
+      "main": [[{ "node": "Respond Success", "type": "main", "index": 0 }]]
+    },
+    "Log Transit Notification": {
+      "main": [[{ "node": "Respond Success", "type": "main", "index": 0 }]]
+    },
+    "Log Unknown Tracking": {
+      "main": [[{ "node": "Respond Success", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-07-04T08:30:00.000Z",
+  "versionId": "1"
+}

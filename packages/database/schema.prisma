@@ -8,19 +8,70 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model DemoShipment {
-  id               Int      @id @default(autoincrement())
-  fromAddress      String   @map("from_address")
-  toAddress        String   @map("to_address")
-  weight           Decimal  @db.Decimal(10, 2)
-  status           String   @default("draft") @db.VarChar(50)
-  quoteAmount      Decimal? @map("quote_amount") @db.Decimal(10, 2)
-  shippoObjectId   String?  @map("shippo_object_id") @db.VarChar(100)
-  shippoRateId     String?  @map("shippo_rate_id") @db.VarChar(100)
-  trackingNumber   String?  @map("tracking_number") @db.VarChar(100)
-  shippoRates      Json?    @map("shippo_rates")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+// 演示测试码表
+model DemoToken {
+  code          String         @id @db.VarChar(20)
+  customerName  String         @map("customer_name") @db.VarChar(100)
+  customerEmail String         @map("customer_email") @db.VarChar(100)
+  customerPhone String?        @map("customer_phone") @db.VarChar(20)
+  maxShipments  Int            @default(10) @map("max_shipments")
+  usedShipments Int            @default(0) @map("used_shipments")
+  expiresAt     DateTime?      @map("expires_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  shipments     DemoShipment[]
 
+  @@map("demo_tokens")
+}
+
+// 订单表
+model DemoShipment {
+  id               Int       @id @default(autoincrement())
+  tokenCode        String?   @map("token_code") @db.VarChar(20)
+  fromAddress      String    @map("from_address")
+  toAddress        String    @map("to_address")
+  senderName       String?   @map("sender_name") @db.VarChar(100)
+  senderPhone      String?   @map("sender_phone") @db.VarChar(30)
+  senderEmail      String?   @map("sender_email") @db.VarChar(100)
+  weight           Decimal   @db.Decimal(10, 2)
+  parcelDetails    Json?     @map("parcel_details")
+  status           String    @default("draft") @db.VarChar(50)
+  quoteAmount      Decimal?  @map("quote_amount") @db.Decimal(10, 2)
+  shippoObjectId   String?   @map("shippo_object_id") @db.VarChar(100)
+  shippoRateId     String?   @map("shippo_rate_id") @db.VarChar(100)
+  shippoRates      Json?     @map("shippo_rates")
+  trackingNumber   String?   @map("tracking_number") @db.VarChar(100)
+  trackingStatus   String?   @map("tracking_status") @db.VarChar(50)
+  trackingUrl      String?   @map("tracking_url") @db.VarChar(500)
+  labelUrl         String?   @map("label_url") @db.VarChar(500)
+  carrier          String?   @db.VarChar(50)
+  serviceName      String?   @map("service_name") @db.VarChar(100)
+  estimatedDays    Int?      @map("estimated_days")
+  paidAt           DateTime? @map("paid_at")
+  stripePaymentId  String?   @map("stripe_payment_id") @db.VarChar(100)
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  token            DemoToken? @relation(fields: [tokenCode], references: [code], onDelete: SetNull)
+  logs             AutomationLog[]
+
+  @@index([tokenCode])
+  @@index([status])
+  @@index([trackingNumber])
   @@map("demo_shipments")
+}
+
+// 自动化日志表
+model AutomationLog {
+  id          Int          @id @default(autoincrement())
+  shipmentId  Int?         @map("shipment_id")
+  actionType  String       @map("action_type") @db.VarChar(50)
+  details     Json?
+  success     Boolean      @default(true)
+  errorMsg    String?      @map("error_msg")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  shipment    DemoShipment? @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId])
+  @@index([actionType])
+  @@index([createdAt])
+  @@map("automation_logs")
 }

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { HttpModule } from '@nestjs/axios';
-import { QuotesModule } from './quotes/quotes.module';
+import { ShipmentsModule } from './shipments/shipments.module';
 
 @Module({
   imports: [
@@ -10,7 +10,7 @@ import { QuotesModule } from './quotes/quotes.module';
       envFilePath: '../../.env.local',
     }),
     HttpModule,
-    QuotesModule,
+    ShipmentsModule,
   ],
 })
 export class AppModule {}

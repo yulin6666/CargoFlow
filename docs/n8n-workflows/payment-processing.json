@@ -1,0 +1,177 @@
+{
+  "name": "CargoFlow - Payment Processing",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "stripe-payment-webhook",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "stripe-payment-webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body;\nconst event = body;\n\n// Stripe webhook event 结构\nconst eventType = event.type;\nconst paymentIntent = event.data?.object || {};\n\nif (eventType !== 'payment_intent.succeeded') {\n  // 只处理支付成功事件，其他事件返回 200 但不处理\n  return {\n    eventType,\n    shouldProcess: false,\n    message: `Event type ${eventType} ignored`\n  };\n}\n\nconst paymentId = paymentIntent.id;\nconst amount = paymentIntent.amount / 100; // Stripe 以分为单位\nconst currency = paymentIntent.currency;\nconst metadata = paymentIntent.metadata || {};\nconst shipmentId = metadata.shipment_id;\n\nif (!shipmentId) {\n  throw new Error('Payment Intent metadata 缺少 shipment_id');\n}\n\nreturn {\n  eventType,\n  shouldProcess: true,\n  paymentId,\n  amount,\n  currency,\n  shipmentId: parseInt(shipmentId),\n  customerEmail: paymentIntent.receipt_email || metadata.customer_email\n};"
+      },
+      "id": "parse-webhook",
+      "name": "Parse Webhook",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.shouldProcess }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "should-process",
+      "name": "Should Process",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, status, quote_amount, tracking_number FROM demo_shipments WHERE id = {{ $json.shipmentId }} LIMIT 1;",
+        "options": {}
+      },
+      "id": "get-shipment",
+      "name": "Get Shipment",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [900, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE demo_shipments SET status = 'paid', stripe_payment_id = '{{ $('Parse Webhook').first().json.paymentId }}', paid_at = NOW(), updated_at = NOW() WHERE id = {{ $json.id }} RETURNING *;",
+        "options": {}
+      },
+      "id": "update-shipment-paid",
+      "name": "Update Shipment Paid",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1120, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO automation_logs (shipment_id, action_type, details, created_at) VALUES ({{ $json.id }}, 'payment_succeeded', '{\"payment_id\": \"{{ $('Parse Webhook').first().json.paymentId }}\", \"amount\": {{ $('Parse Webhook').first().json.amount }}, \"currency\": \"{{ $('Parse Webhook').first().json.currency }}\"}'::jsonb, NOW());",
+        "options": {}
+      },
+      "id": "log-payment",
+      "name": "Log Payment",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1340, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO automation_logs (shipment_id, action_type, details, success, created_at) VALUES ({{ $('Update Shipment Paid').first().json.id }}, 'email_payment_confirmation', '{\"email\": \"{{ $('Parse Webhook').first().json.customerEmail }}\", \"message\": \"支付确认邮件\"}'::jsonb, true, NOW());",
+        "options": {}
+      },
+      "id": "log-email-sent",
+      "name": "Log Email Sent",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1560, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true } }}",
+        "options": {}
+      },
+      "id": "respond-success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1780, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"message\": \"Event ignored\" } }}",
+        "options": {}
+      },
+      "id": "respond-ignored",
+      "name": "Respond Ignored",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [900, 400]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Parse Webhook", "type": "main", "index": 0 }]]
+    },
+    "Parse Webhook": {
+      "main": [[{ "node": "Should Process", "type": "main", "index": 0 }]]
+    },
+    "Should Process": {
+      "main": [
+        [{ "node": "Get Shipment", "type": "main", "index": 0 }],
+        [{ "node": "Respond Ignored", "type": "main", "index": 0 }]
+      ]
+    },
+    "Get Shipment": {
+      "main": [[{ "node": "Update Shipment Paid", "type": "main", "index": 0 }]]
+    },
+    "Update Shipment Paid": {
+      "main": [[{ "node": "Log Payment", "type": "main", "index": 0 }]]
+    },
+    "Log Payment": {
+      "main": [[{ "node": "Log Email Sent", "type": "main", "index": 0 }]]
+    },
+    "Log Email Sent": {
+      "main": [[{ "node": "Respond Success", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-07-04T08:30:00.000Z",
+  "versionId": "1"
+}

@@ -1,0 +1,105 @@
+{
+  "name": "CargoFlow - List Shipments",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "shipments",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "list-shipments"
+    },
+    {
+      "parameters": {
+        "jsCode": "const query = $input.first().json.query || {};\nconst tokenCode = query.token_code;\nconst status = query.status;\nconst limit = parseInt(query.limit) || 50;\nconst offset = parseInt(query.offset) || 0;\n\nreturn { tokenCode, status, limit, offset };"
+      },
+      "id": "parse-query",
+      "name": "Parse Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const params = $input.first().json;\nlet whereClause = '1=1';\nlet orderBy = 'ORDER BY created_at DESC';\n\nif (params.tokenCode) {\n  whereClause += ` AND token_code = '${params.tokenCode}'`;\n}\n\nif (params.status) {\n  whereClause += ` AND status = '${params.status}'`;\n}\n\nconst query = `SELECT id, token_code, from_address, to_address, weight, status, quote_amount, tracking_number, tracking_status, carrier, service_name, estimated_days, label_url, tracking_url, created_at, updated_at FROM demo_shipments WHERE ${whereClause} ${orderBy} LIMIT ${params.limit} OFFSET ${params.offset};`;\n\nreturn { query };"
+      },
+      "id": "build-query",
+      "name": "Build Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "={{ $json.query }}",
+        "options": {}
+      },
+      "id": "get-shipments",
+      "name": "Get Shipments",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [900, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const shipments = $input.all().map(item => item.json);\nconst params = $('Parse Query').first().json;\n\nconst formattedShipments = shipments.map(s => ({\n  id: s.id,\n  tokenCode: s.token_code,\n  fromAddress: s.from_address,\n  toAddress: s.to_address,\n  weight: parseFloat(s.weight),\n  status: s.status,\n  quoteAmount: s.quote_amount ? parseFloat(s.quote_amount) : null,\n  trackingNumber: s.tracking_number,\n  trackingStatus: s.tracking_status,\n  carrier: s.carrier,\n  serviceName: s.service_name,\n  estimatedDays: s.estimated_days,\n  labelUrl: s.label_url,\n  trackingUrl: s.tracking_url,\n  createdAt: s.created_at,\n  updatedAt: s.updated_at\n}));\n\nreturn {\n  success: true,\n  data: formattedShipments,\n  count: formattedShipments.length,\n  limit: params.limit,\n  offset: params.offset\n};"
+      },
+      "id": "format-response",
+      "name": "Format Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "respond-to-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1340, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Parse Query", "type": "main", "index": 0 }]]
+    },
+    "Parse Query": {
+      "main": [[{ "node": "Build Query", "type": "main", "index": 0 }]]
+    },
+    "Build Query": {
+      "main": [[{ "node": "Get Shipments", "type": "main", "index": 0 }]]
+    },
+    "Get Shipments": {
+      "main": [[{ "node": "Format Response", "type": "main", "index": 0 }]]
+    },
+    "Format Response": {
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-07-04T08:30:00.000Z",
+  "versionId": "1"
+}

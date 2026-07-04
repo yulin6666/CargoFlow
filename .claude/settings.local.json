@@ -15,7 +15,12 @@
       "WebFetch(domain:docs.goshippo.com)",
       "WebSearch",
       "WebFetch(domain:goshippo.com)",
-      "Bash(docker ps:*)"
+      "Bash(docker ps:*)",
+      "Bash(cd:*)",
+      "Bash(ls -lh /Users/lindediannao/Documents/project/CargoFlow/apps/backend/src/shipments/*.ts)",
+      "Bash(npx tsc:*)",
+      "Bash(kill 86149)",
+      "Bash(kill 63955)"
     ]
   }
 }
