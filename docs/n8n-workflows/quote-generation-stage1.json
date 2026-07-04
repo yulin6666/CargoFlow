@@ -28,7 +28,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO demo_shipments (from_address, to_address, weight, status, quote_amount, created_at, updated_at)\nVALUES ('{{ $json.fromAddress }}', '{{ $json.toAddress }}', {{ $json.weight }}, '{{ $json.status }}', {{ $json.quoteAmount }}, NOW(), NOW())\nRETURNING *;",
+        "query": "INSERT INTO demo_shipments (from_address, to_address, weight, status, quote_amount, created_at, updated_at)\nVALUES ('{{ $json.fromAddress }}', '{{ $json.toAddress }}', {{ $json.weight }}, 'draft', {{ $json.quoteAmount }}, NOW(), NOW())\nRETURNING *;",
         "options": {}
       },
       "id": "postgres-insert",
