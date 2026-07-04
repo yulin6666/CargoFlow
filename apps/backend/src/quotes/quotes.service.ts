@@ -38,6 +38,11 @@ export class QuotesService {
 
       this.logger.log(`n8n response: ${JSON.stringify(response.data)}`);
 
+      // 检查响应是否为空
+      if (!response.data || Object.keys(response.data).length === 0) {
+        throw new Error('n8n returned empty response');
+      }
+
       return response.data;
     } catch (error) {
       this.logger.error(`Failed to create quote: ${error.message}`);

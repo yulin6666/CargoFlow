@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Logger } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Logger, HttpCode, HttpStatus } from '@nestjs/common';
 import { QuotesService } from './quotes.service';
 import { CreateQuoteDto } from './dto/create-quote.dto';
 
@@ -9,6 +9,7 @@ export class QuotesController {
   constructor(private readonly quotesService: QuotesService) {}
 
   @Post()
+  @HttpCode(HttpStatus.OK)
   async create(@Body() createQuoteDto: CreateQuoteDto) {
     this.logger.log(`POST /api/quotes - ${JSON.stringify(createQuoteDto)}`);
     return this.quotesService.createQuote(createQuoteDto);

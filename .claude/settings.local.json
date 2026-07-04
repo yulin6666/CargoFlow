@@ -8,7 +8,10 @@
       "Bash(../../node_modules/.bin/nest --version 2>&1)",
       "Bash(../../node_modules/.bin/nest build:*)",
       "Bash(npx prisma:*)",
-      "Bash(docker exec:*)"
+      "Bash(docker exec:*)",
+      "Bash(curl:*)",
+      "Bash(kill 60179)",
+      "Bash(xargs kill:*)"
     ]
   }
 }
