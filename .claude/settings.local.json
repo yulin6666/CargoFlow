@@ -4,7 +4,11 @@
       "Bash(chmod:*)",
       "Bash(npm install:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(../../node_modules/.bin/nest --version 2>&1)",
+      "Bash(../../node_modules/.bin/nest build:*)",
+      "Bash(npx prisma:*)",
+      "Bash(docker exec:*)"
     ]
   }
 }
