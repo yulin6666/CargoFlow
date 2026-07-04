@@ -1,9 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
-import { prisma } from '@cargoflow/database';
+import { PrismaClient } from '@prisma/client';
 import { CreateQuoteDto } from './dto/create-quote.dto';
 import { firstValueFrom } from 'rxjs';
+
+const prisma = new PrismaClient();
 
 @Injectable()
 export class QuotesService {

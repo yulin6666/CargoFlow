@@ -3,7 +3,8 @@
     "allow": [
       "Bash(chmod:*)",
       "Bash(npm install:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ]
   }
 }
