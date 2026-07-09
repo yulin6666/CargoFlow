@@ -45,7 +45,8 @@
       "Bash(do)",
       "Bash(done)",
       "Bash(PGPASSWORD=password psql -h localhost -p 5433 -U root -d logistics_demo -c \"SELECT id, tracking_number, sender_email, sender_name FROM demo_shipments WHERE id = 18;\")",
-      "Bash(PGPASSWORD=password psql -h localhost -p 5433 -U root -d logistics_demo -c \"SELECT id, tracking_number FROM demo_shipments WHERE id=18;\" 2>&1)"
+      "Bash(PGPASSWORD=password psql -h localhost -p 5433 -U root -d logistics_demo -c \"SELECT id, tracking_number FROM demo_shipments WHERE id=18;\" 2>&1)",
+      "Bash(./scripts/test-airtable-full.sh)"
     ]
   }
 }

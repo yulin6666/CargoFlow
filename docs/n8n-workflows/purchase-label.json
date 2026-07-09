@@ -34,7 +34,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT id, shippo_object_id, shippo_rate_id, status FROM demo_shipments WHERE id = {{ $json.shipmentId }} LIMIT 1;",
+        "query": "SELECT id, shippo_object_id, shippo_rate_id, status, sender_email, sender_name, sender_phone, from_address, to_address FROM demo_shipments WHERE id = {{ $json.shipmentId }} LIMIT 1;",
         "options": {}
       },
       "id": "get-shipment",
@@ -108,7 +108,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "UPDATE demo_shipments SET status = 'label_purchased', tracking_number = '{{ $json.trackingNumber }}', label_url = '{{ $json.labelUrl }}', tracking_url = '{{ $json.trackingUrl }}', carrier = '{{ $json.carrier }}', service_name = '{{ $json.serviceName }}', quote_amount = {{ $json.amount }}, updated_at = NOW() WHERE id = {{ $json.shipmentId }} RETURNING *;",
+        "query": "UPDATE demo_shipments SET status = 'label_purchased', tracking_number = '{{ $json.trackingNumber }}', label_url = '{{ $json.labelUrl }}', tracking_url = '{{ $json.trackingUrl }}', updated_at = NOW() WHERE id = {{ $json.shipmentId }} RETURNING *;",
         "options": {}
       },
       "id": "update-shipment",
@@ -149,16 +149,119 @@
     },
     {
       "parameters": {
-        "jsCode": "const shipment = $input.first().json;\nconst transaction = $('Parse Transaction').first().json;\n\nreturn {\n  success: true,\n  shipmentId: shipment.id,\n  status: shipment.status,\n  trackingNumber: transaction.trackingNumber,\n  labelUrl: transaction.labelUrl,\n  trackingUrl: transaction.trackingUrl,\n  carrier: transaction.carrier,\n  serviceName: transaction.serviceName,\n  message: `Label 购买成功！Tracking: ${transaction.trackingNumber}`\n};"
+        "jsCode": "const shipment = $('Update Shipment').first().json;\nconst transaction = $('Parse Transaction').first().json;\nconst origShipment = $('Get Shipment').first().json;\n\nreturn {\n  contactEmail: origShipment.sender_email || shipment.sender_email || `demo_${shipment.id}@cargoflow.test`,\n  contactName: origShipment.sender_name || shipment.sender_name || `Customer #${shipment.id}`,\n  contactPhone: origShipment.sender_phone || shipment.sender_phone || '',\n  orderShipmentId: shipment.id,\n  orderAmount: shipment.quote_amount || 0,\n  orderRoute: `${shipment.from_address || origShipment.from_address} → ${shipment.to_address || origShipment.to_address}`,\n  orderCarrier: `${shipment.carrier || ''} ${shipment.service_name || ''}`.trim() || 'Unknown',\n  orderDate: new Date().toISOString().split('T')[0],\n  trackingNumber: transaction.trackingNumber || shipment.tracking_number\n};"
+      },
+      "id": "build-airtable-data",
+      "name": "Build Airtable Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 300]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Email": "={{ $json.contactEmail }}",
+            "Name": "={{ $json.contactName }}",
+            "Phone": "={{ $json.contactPhone }}"
+          }
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "airtable-add-contact",
+      "name": "Airtable - Add Contact",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [2220, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable-credentials",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Shipment ID": "={{ $('Build Airtable Data').first().json.orderShipmentId }}",
+            "Amount": "={{ $('Build Airtable Data').first().json.orderAmount }}",
+            "Route": "={{ $('Build Airtable Data').first().json.orderRoute }}",
+            "Carrier": "={{ $('Build Airtable Data').first().json.orderCarrier }}",
+            "Date": "={{ $('Build Airtable Data').first().json.orderDate }}",
+            "Customer Email": "={{ $('Build Airtable Data').first().json.contactEmail }}",
+            "Tracking Number": "={{ $('Build Airtable Data').first().json.trackingNumber }}"
+          }
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "id": "airtable-add-order",
+      "name": "Airtable - Add Order",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [2440, 300],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable-credentials",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO automation_logs (shipment_id, action_type, details, success, created_at) VALUES ({{ $('Build Airtable Data').first().json.orderShipmentId }}, 'airtable_synced', '{\"contact_email\": \"{{ $('Build Airtable Data').first().json.contactEmail }}\", \"order_amount\": {{ $('Build Airtable Data').first().json.orderAmount }}}'::jsonb, true, NOW());",
+        "options": {}
+      },
+      "id": "log-airtable",
+      "name": "Log Airtable",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [2660, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const shipment = $('Update Shipment').first().json;\nconst transaction = $('Parse Transaction').first().json;\n\nreturn {\n  success: true,\n  shipmentId: shipment.id,\n  status: shipment.status,\n  trackingNumber: transaction.trackingNumber,\n  labelUrl: transaction.labelUrl,\n  trackingUrl: transaction.trackingUrl,\n  carrier: transaction.carrier,\n  serviceName: transaction.serviceName,\n  message: `Label 购买成功！Tracking: ${transaction.trackingNumber}`\n};"
       },
       "id": "format-response",
       "name": "Format Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        2000,
-        300
-      ]
+      "position": [2880, 300]
     },
     {
       "parameters": {
@@ -170,10 +273,7 @@
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [
-        2220,
-        300
-      ]
+      "position": [3100, 300]
     }
   ],
   "connections": {
@@ -255,6 +355,50 @@
       ]
     },
     "Log Action": {
+      "main": [
+        [
+          {
+            "node": "Build Airtable Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Airtable Data": {
+      "main": [
+        [
+          {
+            "node": "Airtable - Add Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable - Add Contact": {
+      "main": [
+        [
+          {
+            "node": "Airtable - Add Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable - Add Order": {
+      "main": [
+        [
+          {
+            "node": "Log Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Airtable": {
       "main": [
         [
           {
