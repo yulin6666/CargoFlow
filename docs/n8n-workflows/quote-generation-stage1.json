@@ -83,7 +83,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO demo_shipments (from_address, to_address, weight, status, quote_amount, shippo_object_id, shippo_rate_id, shippo_rates, sender_name, sender_phone, sender_email, created_at, updated_at)\nVALUES ('{{ $json.fromAddress }}', '{{ $json.toAddress }}', {{ $json.weight }}, 'draft', {{ $json.quoteAmount }}, '{{ $json.shippoObjectId }}', '{{ $json.shippoRateId }}', '{{ JSON.stringify($json.allRates) }}'::jsonb, '{{ $json.senderName }}', '{{ $json.senderPhone }}', '{{ $json.senderEmail }}', NOW(), NOW())\nRETURNING *;",
+        "query": "INSERT INTO demo_shipments (from_address, to_address, weight, status, quote_amount, shippo_object_id, shippo_rate_id, shippo_rates, sender_name, sender_phone, sender_email, carrier, service_name, estimated_days, created_at, updated_at)\nVALUES ('{{ $json.fromAddress }}', '{{ $json.toAddress }}', {{ $json.weight }}, 'draft', {{ $json.quoteAmount }}, '{{ $json.shippoObjectId }}', '{{ $json.shippoRateId }}', '{{ JSON.stringify($json.allRates) }}'::jsonb, '{{ $json.senderName }}', '{{ $json.senderPhone }}', '{{ $json.senderEmail }}', '{{ $json.carrier }}', '{{ $json.serviceName }}', {{ $json.estimatedDays }}, NOW(), NOW())\nRETURNING *;",
         "options": {}
       },
       "id": "postgres-insert",
