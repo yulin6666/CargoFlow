@@ -20,7 +20,32 @@
       "Bash(ls -lh /Users/lindediannao/Documents/project/CargoFlow/apps/backend/src/shipments/*.ts)",
       "Bash(npx tsc:*)",
       "Bash(kill 86149)",
-      "Bash(kill 63955)"
+      "Bash(kill 63955)",
+      "Bash(node:*)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d[''''version'''']\\)\")",
+      "Bash(source /Users/lindediannao/Documents/project/CargoFlow/.env)",
+      "Bash(docker stop:*)",
+      "Bash(docker rm:*)",
+      "Bash(docker run:*)",
+      "Bash(lsof -ti:3001 -ti:3000)",
+      "Bash(lsof -ti:3001)",
+      "Bash(xargs ps:*)",
+      "Bash(lsof -ti:3000)",
+      "Bash(docker compose:*)",
+      "Bash(psql:*)",
+      "Bash(python3 -m json.tool /Users/lindediannao/Documents/project/CargoFlow/docs/n8n-workflows/tracking-webhook.json)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(python3 -m json.tool)",
+      "Bash(python3 -c \"import sys,json; json.load\\(sys.stdin\\); print\\(''''valid''''\\)\")",
+      "Bash(python3:*)",
+      "Bash(npm run:*)",
+      "Bash(PGPASSWORD=password psql -h localhost -p 5433 -U root -d logistics_demo -c \"SELECT id, from_address, to_address, tracking_number, status FROM demo_shipments ORDER BY id DESC LIMIT 10;\")",
+      "Bash(grep -l \"webhookId\" *.json)",
+      "Bash(for file:*)",
+      "Bash(do)",
+      "Bash(done)",
+      "Bash(PGPASSWORD=password psql -h localhost -p 5433 -U root -d logistics_demo -c \"SELECT id, tracking_number, sender_email, sender_name FROM demo_shipments WHERE id = 18;\")",
+      "Bash(PGPASSWORD=password psql -h localhost -p 5433 -U root -d logistics_demo -c \"SELECT id, tracking_number FROM demo_shipments WHERE id=18;\" 2>&1)"
     ]
   }
 }

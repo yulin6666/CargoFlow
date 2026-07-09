@@ -12,18 +12,24 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [240, 300],
+      "position": [
+        240,
+        300
+      ],
       "webhookId": "stripe-payment-webhook"
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json.body;\nconst event = body;\n\n// Stripe webhook event 结构\nconst eventType = event.type;\nconst paymentIntent = event.data?.object || {};\n\nif (eventType !== 'payment_intent.succeeded') {\n  // 只处理支付成功事件，其他事件返回 200 但不处理\n  return {\n    eventType,\n    shouldProcess: false,\n    message: `Event type ${eventType} ignored`\n  };\n}\n\nconst paymentId = paymentIntent.id;\nconst amount = paymentIntent.amount / 100; // Stripe 以分为单位\nconst currency = paymentIntent.currency;\nconst metadata = paymentIntent.metadata || {};\nconst shipmentId = metadata.shipment_id;\n\nif (!shipmentId) {\n  throw new Error('Payment Intent metadata 缺少 shipment_id');\n}\n\nreturn {\n  eventType,\n  shouldProcess: true,\n  paymentId,\n  amount,\n  currency,\n  shipmentId: parseInt(shipmentId),\n  customerEmail: paymentIntent.receipt_email || metadata.customer_email\n};"
+        "jsCode": "const body = $input.first().json.body;\nconst event = body;\nconst eventType = event.type;\nconst paymentIntent = event.data?.object || {};\n\nif (eventType !== 'payment_intent.succeeded') {\n  return { shouldProcess: false, eventType };\n}\n\nconst paymentId = paymentIntent.id;\nconst amount = paymentIntent.amount / 100;\nconst currency = (paymentIntent.currency || 'usd').toUpperCase();\nconst metadata = paymentIntent.metadata || {};\nconst shipmentId = parseInt(metadata.shipment_id);\nconst customerEmail = paymentIntent.receipt_email || metadata.customer_email || '';\n\nif (!shipmentId) throw new Error('metadata 缺少 shipment_id');\n\nreturn { shouldProcess: true, paymentId, amount, currency, shipmentId, customerEmail };"
       },
       "id": "parse-webhook",
       "name": "Parse Webhook",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [460, 300]
+      "position": [
+        460,
+        300
+      ]
     },
     {
       "parameters": {
@@ -40,19 +46,25 @@
       "name": "Should Process",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [680, 300]
+      "position": [
+        680,
+        300
+      ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT id, status, quote_amount, tracking_number FROM demo_shipments WHERE id = {{ $json.shipmentId }} LIMIT 1;",
+        "query": "SELECT id, from_address, to_address, weight, carrier, service_name, quote_amount, sender_email, sender_phone, tracking_number FROM demo_shipments WHERE id = {{ $json.shipmentId }} LIMIT 1;",
         "options": {}
       },
       "id": "get-shipment",
       "name": "Get Shipment",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
-      "position": [900, 200],
+      "position": [
+        900,
+        200
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-credentials",
@@ -66,11 +78,14 @@
         "query": "UPDATE demo_shipments SET status = 'paid', stripe_payment_id = '{{ $('Parse Webhook').first().json.paymentId }}', paid_at = NOW(), updated_at = NOW() WHERE id = {{ $json.id }} RETURNING *;",
         "options": {}
       },
-      "id": "update-shipment-paid",
-      "name": "Update Shipment Paid",
+      "id": "update-paid",
+      "name": "Update Paid",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
-      "position": [1120, 200],
+      "position": [
+        1120,
+        200
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-credentials",
@@ -88,7 +103,10 @@
       "name": "Log Payment",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
-      "position": [1340, 200],
+      "position": [
+        1340,
+        200
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-credentials",
@@ -98,15 +116,191 @@
     },
     {
       "parameters": {
-        "operation": "executeQuery",
-        "query": "INSERT INTO automation_logs (shipment_id, action_type, details, success, created_at) VALUES ({{ $('Update Shipment Paid').first().json.id }}, 'email_payment_confirmation', '{\"email\": \"{{ $('Parse Webhook').first().json.customerEmail }}\", \"message\": \"支付确认邮件\"}'::jsonb, true, NOW());",
+        "jsCode": "const shipment = $('Get Shipment').first().json;\nconst payment = $('Parse Webhook').first().json;\nconst toEmail = payment.customerEmail || shipment.sender_email;\n\nif (!toEmail) return { skipEmail: true };\n\nreturn {\n  skipEmail: false,\n  toEmail,\n  subject: `CargoFlow 支付确认 - 订单 #${shipment.id}`,\n  htmlBody: `\n<div style=\"font-family:sans-serif;max-width:600px;margin:0 auto\">\n  <h2 style=\"color:#2563eb\">🚚 CargoFlow 支付确认</h2>\n  <p>您好！您的运费已支付成功。</p>\n  <table style=\"width:100%;border-collapse:collapse;margin:16px 0\">\n    <tr><td style=\"padding:8px;background:#f3f4f6;font-weight:bold\">订单编号</td><td style=\"padding:8px\">#${shipment.id}</td></tr>\n    <tr><td style=\"padding:8px;background:#f3f4f6;font-weight:bold\">路线</td><td style=\"padding:8px\">${shipment.from_address} → ${shipment.to_address}</td></tr>\n    <tr><td style=\"padding:8px;background:#f3f4f6;font-weight:bold\">承运商</td><td style=\"padding:8px\">${shipment.carrier} ${shipment.service_name}</td></tr>\n    <tr><td style=\"padding:8px;background:#f3f4f6;font-weight:bold\">支付金额</td><td style=\"padding:8px;color:#16a34a;font-weight:bold\">$${payment.amount} ${payment.currency}</td></tr>\n  </table>\n  <p style=\"color:#6b7280;font-size:12px\">感谢使用 CargoFlow 物流服务</p>\n</div>\n`\n};"
+      },
+      "id": "build-email",
+      "name": "Build Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ !$json.skipEmail }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "has-email",
+      "name": "Has Email",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ from: $env.RESEND_FROM_EMAIL || 'onboarding@resend.dev', to: [$json.toEmail], subject: $json.subject, html: $json.htmlBody }) }}",
         "options": {}
       },
-      "id": "log-email-sent",
-      "name": "Log Email Sent",
+      "id": "send-email",
+      "name": "Resend - Send Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        100
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "resend-credentials",
+          "name": "Resend API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO automation_logs (shipment_id, action_type, details, success, created_at) VALUES ({{ $('Get Shipment').first().json.id }}, 'email_payment_confirmation', '{\"to\": \"{{ $('Build Email').first().json.toEmail }}\", \"subject\": \"支付确认\"}'::jsonb, true, NOW());",
+        "options": {}
+      },
+      "id": "log-email",
+      "name": "Log Email",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
-      "position": [1560, 200],
+      "position": [
+        2220,
+        100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-credentials",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const shipment = $('Get Shipment').first().json;\nconst payment = $('Parse Webhook').first().json;\n\nreturn {\n  contactEmail: payment.customerEmail || shipment.sender_email || `demo_${shipment.id}@cargoflow.test`,\n  contactName: shipment.sender_name || `Customer #${shipment.id}`,\n  contactPhone: shipment.sender_phone || '',\n  orderShipmentId: shipment.id,\n  orderAmount: payment.amount,\n  orderRoute: `${shipment.from_address} → ${shipment.to_address}`,\n  orderCarrier: `${shipment.carrier || ''} ${shipment.service_name || ''}`.trim(),\n  orderDate: new Date().toISOString().split('T')[0]\n};"
+      },
+      "id": "build-airtable-data",
+      "name": "Build Airtable Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        340
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Email": "={{ $json.contactEmail }}",
+            "Name": "={{ $json.contactName }}",
+            "Phone": "={{ $json.contactPhone }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "airtable-add-contact",
+      "name": "Airtable - Add Contact",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        340
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable-credentials",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "base": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "table": {
+          "__rl": true,
+          "mode": "list",
+          "value": ""
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Shipment ID": "={{ $('Build Airtable Data').first().json.orderShipmentId }}",
+            "Amount": "={{ $('Build Airtable Data').first().json.orderAmount }}",
+            "Route": "={{ $('Build Airtable Data').first().json.orderRoute }}",
+            "Carrier": "={{ $('Build Airtable Data').first().json.orderCarrier }}",
+            "Date": "={{ $('Build Airtable Data').first().json.orderDate }}",
+            "Customer Email": "={{ $('Build Airtable Data').first().json.contactEmail }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "airtable-add-order",
+      "name": "Airtable - Add Order",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        340
+      ],
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "airtable-credentials",
+          "name": "Airtable API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO automation_logs (shipment_id, action_type, details, success, created_at) VALUES ({{ $('Build Airtable Data').first().json.orderShipmentId }}, 'airtable_synced', '{\"contact_email\": \"{{ $('Build Airtable Data').first().json.contactEmail }}\", \"order_amount\": {{ $('Build Airtable Data').first().json.orderAmount }}}'::jsonb, true, NOW());",
+        "options": {}
+      },
+      "id": "log-airtable",
+      "name": "Log Airtable",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        2220,
+        340
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-credentials",
@@ -124,7 +318,10 @@
       "name": "Respond Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [1780, 300]
+      "position": [
+        2660,
+        300
+      ]
     },
     {
       "parameters": {
@@ -136,33 +333,185 @@
       "name": "Respond Ignored",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [900, 400]
+      "position": [
+        900,
+        400
+      ]
     }
   ],
   "connections": {
     "Webhook": {
-      "main": [[{ "node": "Parse Webhook", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Parse Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Parse Webhook": {
-      "main": [[{ "node": "Should Process", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Should Process",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Should Process": {
       "main": [
-        [{ "node": "Get Shipment", "type": "main", "index": 0 }],
-        [{ "node": "Respond Ignored", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Get Shipment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Ignored",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Get Shipment": {
-      "main": [[{ "node": "Update Shipment Paid", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Update Paid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "Update Shipment Paid": {
-      "main": [[{ "node": "Log Payment", "type": "main", "index": 0 }]]
+    "Update Paid": {
+      "main": [
+        [
+          {
+            "node": "Log Payment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Log Payment": {
-      "main": [[{ "node": "Log Email Sent", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Build Email",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Airtable Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "Log Email Sent": {
-      "main": [[{ "node": "Respond Success", "type": "main", "index": 0 }]]
+    "Build Email": {
+      "main": [
+        [
+          {
+            "node": "Has Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Email": {
+      "main": [
+        [
+          {
+            "node": "SendGrid - Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SendGrid - Send Email": {
+      "main": [
+        [
+          {
+            "node": "Log Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Email": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Airtable Data": {
+      "main": [
+        [
+          {
+            "node": "Airtable - Add Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable - Add Contact": {
+      "main": [
+        [
+          {
+            "node": "Airtable - Add Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Airtable - Add Order": {
+      "main": [
+        [
+          {
+            "node": "Log Airtable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Airtable": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "pinData": {},
@@ -172,6 +521,6 @@
   "staticData": null,
   "tags": [],
   "triggerCount": 0,
-  "updatedAt": "2026-07-04T08:30:00.000Z",
-  "versionId": "1"
+  "updatedAt": "2026-07-06T00:00:00.000Z",
+  "versionId": "2"
 }

@@ -12,30 +12,39 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [240, 400],
+      "position": [
+        240,
+        400
+      ],
       "webhookId": "shippo-tracking-webhook"
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.first().json.body;\nconst event = body.event || body;\n\n// Shippo webhook payload 结构\nconst trackingStatus = event.data || event.tracking_status || event;\nconst trackingNumber = trackingStatus.tracking_number;\nconst status = trackingStatus.status;\nconst substatus = trackingStatus.substatus?.text || '';\nconst carrier = trackingStatus.carrier;\nconst eta = trackingStatus.eta;\n\nif (!trackingNumber) {\n  throw new Error('Webhook payload 缺少 tracking_number');\n}\n\nreturn {\n  trackingNumber,\n  status,\n  substatus,\n  carrier,\n  eta,\n  trackingHistory: trackingStatus.tracking_history || [],\n  location: trackingStatus.location || {},\n  rawPayload: event\n};"
+        "jsCode": "const body = $input.first().json.body;\nconst trackingStatus = body.data || body.tracking_status || body;\nconst trackingNumber = trackingStatus.tracking_number;\nconst status = trackingStatus.status;\nconst substatus = trackingStatus.substatus?.text || '';\nconst carrier = trackingStatus.carrier;\nconst eta = trackingStatus.eta;\nif (!trackingNumber) { throw new Error('Webhook payload 缺少 tracking_number'); }\nreturn { trackingNumber, status, substatus, carrier, eta, trackingHistory: trackingStatus.tracking_history || [], location: trackingStatus.location || {}, rawPayload: body };"
       },
       "id": "parse-webhook",
       "name": "Parse Webhook",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [460, 400]
+      "position": [
+        460,
+        400
+      ]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT id, status, from_address, to_address, tracking_number FROM demo_shipments WHERE tracking_number = '{{ $json.trackingNumber }}' LIMIT 1;",
+        "query": "SELECT id, status, from_address, to_address, tracking_number, sender_email, sender_phone, sender_name FROM demo_shipments WHERE tracking_number = '{{ $json.trackingNumber }}' LIMIT 1;",
         "options": {}
       },
       "id": "find-shipment",
       "name": "Find Shipment",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
-      "position": [680, 400],
+      "position": [
+        680,
+        400
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-credentials",
@@ -45,13 +54,16 @@
     },
     {
       "parameters": {
-        "jsCode": "const shipment = $input.first().json;\nconst webhook = $('Parse Webhook').first().json;\n\nif (!shipment || !shipment.id) {\n  // 订单不存在，记录日志但不报错\n  return {\n    shipmentFound: false,\n    trackingNumber: webhook.trackingNumber,\n    status: webhook.status,\n    message: '订单未找到，可能是外部 tracking number'\n  };\n}\n\nreturn {\n  shipmentFound: true,\n  shipmentId: shipment.id,\n  trackingNumber: webhook.trackingNumber,\n  newStatus: webhook.status,\n  substatus: webhook.substatus,\n  oldStatus: shipment.status,\n  fromAddress: shipment.from_address,\n  toAddress: shipment.to_address\n};"
+        "jsCode": "const shipment = $input.first().json;\nconst webhook = $('Parse Webhook').first().json;\nif (!shipment || !shipment.id) {\n  return { shipmentFound: false, trackingNumber: webhook.trackingNumber, status: webhook.status, message: '订单未找到' };\n}\nreturn {\n  shipmentFound: true,\n  shipmentId: shipment.id,\n  trackingNumber: webhook.trackingNumber,\n  newStatus: webhook.status,\n  substatus: webhook.substatus,\n  oldStatus: shipment.status,\n  fromAddress: shipment.from_address,\n  toAddress: shipment.to_address,\n  senderEmail: shipment.sender_email || '',\n  senderName: shipment.sender_name || 'Customer'\n};"
       },
       "id": "check-shipment",
       "name": "Check Shipment",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [900, 400]
+      "position": [
+        900,
+        400
+      ]
     },
     {
       "parameters": {
@@ -68,7 +80,10 @@
       "name": "If Shipment Found",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1120, 400]
+      "position": [
+        1120,
+        400
+      ]
     },
     {
       "parameters": {
@@ -80,7 +95,10 @@
       "name": "Update Shipment Status",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
-      "position": [1340, 300],
+      "position": [
+        1340,
+        300
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-credentials",
@@ -98,7 +116,10 @@
       "name": "Log Tracking Update",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
-      "position": [1560, 300],
+      "position": [
+        1560,
+        300
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-credentials",
@@ -122,19 +143,67 @@
       "name": "If Delivered",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1780, 300]
+      "position": [
+        1780,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "from", "value": "CargoFlow <onboarding@resend.dev>" },
+            { "name": "to", "value": "linyubupt@gmail.com" },
+            { "name": "subject", "value": "Your package has been delivered!" },
+            { "name": "html", "value": "={{ '<h2>Package Delivered</h2><p>Hi ' + $('Check Shipment').first().json.senderName + ',</p><p>Tracking: <strong>' + $('Check Shipment').first().json.trackingNumber + '</strong> has been delivered to ' + $('Check Shipment').first().json.toAddress + '.</p><p>Thank you for using CargoFlow!</p>' }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-delivered-email",
+      "name": "Send Delivered Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        200
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "resend-api-key",
+          "name": "Resend API Key"
+        }
+      }
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO automation_logs (shipment_id, action_type, details, success, created_at) VALUES ({{ $('Update Shipment Status').first().json.id }}, 'notification_delivered', '{\"message\": \"货物已送达\", \"tracking_number\": \"{{ $('Check Shipment').first().json.trackingNumber }}\"}'::jsonb, true, NOW());",
+        "query": "INSERT INTO automation_logs (shipment_id, action_type, details, success, created_at) VALUES ({{ $('Update Shipment Status').first().json.id }}, 'email_delivered_sent', '{\"email\": \"{{ $('Check Shipment').first().json.senderEmail }}\", \"tracking_number\": \"{{ $('Check Shipment').first().json.trackingNumber }}\"}'::jsonb, true, NOW());",
         "options": {}
       },
       "id": "log-delivered-notification",
       "name": "Log Delivered Notification",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
-      "position": [2000, 200],
+      "position": [
+        2220,
+        200
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-credentials",
@@ -158,19 +227,67 @@
       "name": "If In Transit",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [1780, 400]
+      "position": [
+        1780,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.resend.com/emails",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "from", "value": "CargoFlow <onboarding@resend.dev>" },
+            { "name": "to", "value": "linyubupt@gmail.com" },
+            { "name": "subject", "value": "Your package is on its way!" },
+            { "name": "html", "value": "={{ '<h2>Package In Transit</h2><p>Hi ' + $('Check Shipment').first().json.senderName + ',</p><p>Tracking: <strong>' + $('Check Shipment').first().json.trackingNumber + '</strong> is now in transit to ' + $('Check Shipment').first().json.toAddress + '.</p><p>We will notify you when it is delivered.</p>' }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-transit-email",
+      "name": "Send Transit Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2000,
+        400
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "resend-api-key",
+          "name": "Resend API Key"
+        }
+      }
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO automation_logs (shipment_id, action_type, details, success, created_at) VALUES ({{ $('Update Shipment Status').first().json.id }}, 'notification_in_transit', '{\"message\": \"货物运输中\", \"tracking_number\": \"{{ $('Check Shipment').first().json.trackingNumber }}\"}'::jsonb, true, NOW());",
+        "query": "INSERT INTO automation_logs (shipment_id, action_type, details, success, created_at) VALUES ({{ $('Update Shipment Status').first().json.id }}, 'email_transit_sent', '{\"email\": \"{{ $('Check Shipment').first().json.senderEmail }}\", \"tracking_number\": \"{{ $('Check Shipment').first().json.trackingNumber }}\"}'::jsonb, true, NOW());",
         "options": {}
       },
       "id": "log-transit-notification",
       "name": "Log Transit Notification",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
-      "position": [2000, 400],
+      "position": [
+        2220,
+        400
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-credentials",
@@ -188,7 +305,10 @@
       "name": "Log Unknown Tracking",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
-      "position": [1340, 500],
+      "position": [
+        1340,
+        500
+      ],
       "credentials": {
         "postgres": {
           "id": "postgres-credentials",
@@ -206,51 +326,178 @@
       "name": "Respond Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [2220, 400]
+      "position": [
+        2440,
+        400
+      ]
     }
   ],
   "connections": {
     "Webhook": {
-      "main": [[{ "node": "Parse Webhook", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Parse Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Parse Webhook": {
-      "main": [[{ "node": "Find Shipment", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Find Shipment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Find Shipment": {
-      "main": [[{ "node": "Check Shipment", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Check Shipment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Check Shipment": {
-      "main": [[{ "node": "If Shipment Found", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "If Shipment Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "If Shipment Found": {
       "main": [
-        [{ "node": "Update Shipment Status", "type": "main", "index": 0 }],
-        [{ "node": "Log Unknown Tracking", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Update Shipment Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Unknown Tracking",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Update Shipment Status": {
-      "main": [[{ "node": "Log Tracking Update", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Log Tracking Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Log Tracking Update": {
-      "main": [[
-        { "node": "If Delivered", "type": "main", "index": 0 },
-        { "node": "If In Transit", "type": "main", "index": 0 }
-      ]]
+      "main": [
+        [
+          {
+            "node": "If Delivered",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If In Transit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "If Delivered": {
-      "main": [[{ "node": "Log Delivered Notification", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Send Delivered Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
-    "If In Transit": {
-      "main": [[{ "node": "Log Transit Notification", "type": "main", "index": 0 }]]
+    "Send Delivered Email": {
+      "main": [
+        [
+          {
+            "node": "Log Delivered Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Log Delivered Notification": {
-      "main": [[{ "node": "Respond Success", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If In Transit": {
+      "main": [
+        [
+          {
+            "node": "Send Transit Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Transit Email": {
+      "main": [
+        [
+          {
+            "node": "Log Transit Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Log Transit Notification": {
-      "main": [[{ "node": "Respond Success", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Log Unknown Tracking": {
-      "main": [[{ "node": "Respond Success", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "pinData": {},
@@ -260,6 +507,6 @@
   "staticData": null,
   "tags": [],
   "triggerCount": 0,
-  "updatedAt": "2026-07-04T08:30:00.000Z",
-  "versionId": "1"
+  "updatedAt": "2026-07-07T08:00:00.000Z",
+  "versionId": "2"
 }

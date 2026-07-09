@@ -12,7 +12,7 @@ export class ShipmentsController {
   @Post('quote')
   @HttpCode(HttpStatus.OK)
   async createQuote(@Body() createQuoteDto: CreateQuoteDto) {
-    this.logger.log(`POST /api/shipments/quote - ${JSON.stringify(createQuoteDto)}`);
+    this.logger.log(`POST /api/shipments/quote`);
     return this.shipmentsService.createQuote(createQuoteDto);
   }
 
@@ -26,6 +26,13 @@ export class ShipmentsController {
     return this.shipmentsService.purchaseLabel(+id, purchaseLabelDto);
   }
 
+  @Post(':id/mock-payment')
+  @HttpCode(HttpStatus.OK)
+  async mockPayment(@Param('id') id: string) {
+    this.logger.log(`POST /api/shipments/${id}/mock-payment`);
+    return this.shipmentsService.mockPayment(+id);
+  }
+
   @Get()
   async listShipments(
     @Query('token_code') tokenCode?: string,
@@ -33,7 +40,6 @@ export class ShipmentsController {
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
-    this.logger.log(`GET /api/shipments - token_code=${tokenCode}, status=${status}`);
     return this.shipmentsService.listShipments({
       tokenCode,
       status,
@@ -44,13 +50,22 @@ export class ShipmentsController {
 
   @Get(':id')
   async getShipment(@Param('id') id: string) {
-    this.logger.log(`GET /api/shipments/${id}`);
     return this.shipmentsService.getShipmentById(+id);
   }
 
   @Get(':id/logs')
   async getShipmentLogs(@Param('id') id: string) {
-    this.logger.log(`GET /api/shipments/${id}/logs`);
     return this.shipmentsService.getShipmentLogs(+id);
+  }
+
+  @Post(':id/simulate-tracking-update')
+  @HttpCode(HttpStatus.OK)
+  async simulateTrackingUpdate(
+    @Param('id') id: string,
+    @Body() body: { status: string; trackingNumber: string },
+  ) {
+    this.logger.log(`POST /api/shipments/${id}/simulate-tracking-update`);
+    this.logger.log(`Received body: ${JSON.stringify(body)}`);
+    return this.shipmentsService.simulateTrackingUpdate(+id, body.status, body.trackingNumber);
   }
 }

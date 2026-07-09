@@ -109,13 +109,17 @@ function LogItem({ log }: { log: AutomationLog }) {
 function ShipmentCard({
   shipment,
   onPurchaseLabel,
+  onCheckout,
   onSelect,
   isSelected,
+  onSimulateTracking,
 }: {
   shipment: Shipment;
   onPurchaseLabel: (id: number) => void;
+  onCheckout: (id: number) => void;
   onSelect: (id: number) => void;
   isSelected: boolean;
+  onSimulateTracking: (id: number, status: string, trackingNumber: string) => void;
 }) {
   return (
     <div
@@ -166,13 +170,39 @@ function ShipmentCard({
           </a>
         )}
 
+        {shipment.status === 'draft' && shipment.quoteAmount && (
+          <button
+            className="ml-auto text-xs bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition-colors"
+            onClick={e => { e.stopPropagation(); onCheckout(shipment.id); }}
+          >
+            ✅ 模拟支付
+          </button>
+        )}
+
         {shipment.status === 'draft' && (
           <button
-            className="ml-auto text-xs bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700 transition-colors"
+            className="text-xs bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700 transition-colors"
             onClick={e => { e.stopPropagation(); onPurchaseLabel(shipment.id); }}
           >
             购买运单
           </button>
+        )}
+
+        {shipment.trackingNumber && (
+          <>
+            <button
+              className="text-xs bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600 transition-colors"
+              onClick={e => { e.stopPropagation(); onSimulateTracking(shipment.id, 'TRANSIT', shipment.trackingNumber!); }}
+            >
+              🚚 模拟运输中
+            </button>
+            <button
+              className="text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600 transition-colors"
+              onClick={e => { e.stopPropagation(); onSimulateTracking(shipment.id, 'DELIVERED', shipment.trackingNumber!); }}
+            >
+              📦 模拟送达
+            </button>
+          </>
         )}
       </div>
 
@@ -189,7 +219,7 @@ export default function Home() {
   const [tab, setTab] = useState<'quote' | 'orders' | 'logs'>('quote');
 
   // 报价表单
-  const [form, setForm] = useState({ fromAddress: 'Chicago', toAddress: 'New York', weight: '10', senderName: 'John Smith', senderPhone: '6505550100', senderEmail: 'john.smith@example.com' });
+  const [form, setForm] = useState({ fromAddress: 'Chicago', toAddress: 'New York', weight: '10', senderName: 'John Smith', senderPhone: '6505550100', senderEmail: 'linyubupt@gmail.com' });
   const [quoting, setQuoting] = useState(false);
   const [quoteResult, setQuoteResult] = useState<QuoteResult | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
@@ -203,6 +233,7 @@ export default function Home() {
 
   // 购买 label
   const [purchasingId, setPurchasingId] = useState<number | null>(null);
+  const [checkingOutId, setCheckingOutId] = useState<number | null>(null);
 
   // 全局日志
   const [allLogs, setAllLogs] = useState<AutomationLog[]>([]);
@@ -212,7 +243,10 @@ export default function Home() {
     try {
       const res = await fetch(`${API_URL}/api/shipments`);
       const data = await res.json();
-      if (data.success && data.data) setShipments(data.data);
+      if (data.success && data.data) {
+        console.log('[fetchShipments] first item:', JSON.stringify(data.data[0]));
+        setShipments(data.data);
+      }
     } catch {
       // ignore
     } finally {
@@ -310,6 +344,50 @@ export default function Home() {
       alert(`❌ 请求失败: ${err instanceof Error ? err.message : '未知错误'}`);
     } finally {
       setPurchasingId(null);
+    }
+  };
+
+  const handleCheckout = async (shipmentId: number) => {
+    setCheckingOutId(shipmentId);
+    try {
+      const res = await fetch(`${API_URL}/api/shipments/${shipmentId}/mock-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchShipments();
+        alert(`✅ 模拟支付成功！订单 #${shipmentId} 已标记为已支付，邮件/HubSpot 自动化已触发。`);
+      } else {
+        alert(`❌ 支付失败: ${data.message || JSON.stringify(data)}`);
+      }
+    } catch (err: unknown) {
+      alert(`❌ 请求失败: ${err instanceof Error ? err.message : '未知错误'}`);
+    } finally {
+      setCheckingOutId(null);
+    }
+  };
+
+  const handleSimulateTracking = async (shipmentId: number, status: string, trackingNumber: string) => {
+    console.log('[handleSimulateTracking]', { shipmentId, status, trackingNumber });
+    try {
+      const res = await fetch(`${API_URL}/api/shipments/${shipmentId}/simulate-tracking-update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, trackingNumber }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchShipments();
+        if (selectedShipmentId === shipmentId) {
+          fetchShipmentDetail(shipmentId);
+        }
+        alert(`✅ 模拟 ${status} webhook 已发送！邮件通知应已触发。`);
+      } else {
+        alert(`❌ 模拟失败: ${data.message || JSON.stringify(data)}`);
+      }
+    } catch (err: unknown) {
+      alert(`❌ 请求失败: ${err instanceof Error ? err.message : '未知错误'}`);
     }
   };
 
@@ -418,13 +496,14 @@ export default function Home() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">邮箱</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">邮箱 <span className="text-red-500">*</span></label>
                       <input
                         type="email"
                         value={form.senderEmail}
                         onChange={e => setForm({ ...form, senderEmail: e.target.value })}
-                        placeholder="sender@example.com（可选）"
+                        placeholder="sender@example.com"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                        required
                       />
                     </div>
                   </div>
@@ -554,8 +633,10 @@ export default function Home() {
                       key={s.id}
                       shipment={s}
                       onPurchaseLabel={id => handlePurchaseLabel(id)}
+                      onCheckout={id => handleCheckout(id)}
                       onSelect={id => setSelectedShipmentId(id === selectedShipmentId ? null : id)}
                       isSelected={selectedShipmentId === s.id}
+                      onSimulateTracking={(id, status, trackingNumber) => handleSimulateTracking(id, status, trackingNumber)}
                     />
                   ))}
                 </div>
