@@ -9,6 +9,7 @@
     "build": "nest build"
   },
   "dependencies": {
+    "@cargoflow/database": "workspace:*",
     "@nestjs/axios": "^3.0.0",
     "@nestjs/common": "^10.0.0",
     "@nestjs/config": "^3.1.1",

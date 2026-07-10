@@ -1,0 +1,18 @@
+# Backend Service Configuration
+[phases.setup]
+nixPkgs = ["nodejs_20", "npm-9_x"]
+
+[phases.install]
+cmds = [
+  "npm install --workspace=@cargoflow/backend --workspace=packages/database",
+  "cd packages/database && npx prisma generate"
+]
+
+[phases.build]
+cmds = ["npm run build:backend"]
+
+[start]
+cmd = "npm run start:backend"
+
+[env]
+NODE_ENV = "production"

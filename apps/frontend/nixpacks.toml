@@ -1,0 +1,15 @@
+# Frontend Service Configuration
+[phases.setup]
+nixPkgs = ["nodejs_20", "npm-9_x"]
+
+[phases.install]
+cmds = ["npm install --workspace=@cargoflow/frontend"]
+
+[phases.build]
+cmds = ["npm run build:frontend"]
+
+[start]
+cmd = "npm run start:frontend"
+
+[env]
+NODE_ENV = "production"
