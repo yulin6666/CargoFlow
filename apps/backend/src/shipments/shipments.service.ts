@@ -3,13 +3,17 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { CreateQuoteDto } from './dto/create-quote.dto';
 import { PurchaseLabelDto } from './dto/purchase-label.dto';
+import { PrismaService } from '../prisma.service';
 
 @Injectable()
 export class ShipmentsService {
   private readonly logger = new Logger(ShipmentsService.name);
   private readonly n8nBaseUrl: string;
 
-  constructor(private readonly httpService: HttpService) {
+  constructor(
+    private readonly httpService: HttpService,
+    private readonly prisma: PrismaService,
+  ) {
     this.n8nBaseUrl = process.env.N8N_WEBHOOK_BASE || 'http://localhost:5678';
   }
 
@@ -58,7 +62,7 @@ export class ShipmentsService {
           data: {
             object: {
               id: `mock_pi_${Date.now()}`,
-              amount: Math.round((shipment.quoteAmount || 0) * 100),
+              amount: Math.round((Number(shipment.quoteAmount) || 0) * 100),
               currency: 'usd',
               receipt_email: shipment.senderEmail || '',
               metadata: {
@@ -86,36 +90,58 @@ export class ShipmentsService {
     offset?: number;
   }) {
     try {
-      const queryParams = new URLSearchParams();
-      if (params.tokenCode) queryParams.append('token_code', params.tokenCode);
-      if (params.status) queryParams.append('status', params.status);
-      if (params.limit) queryParams.append('limit', params.limit.toString());
-      if (params.offset) queryParams.append('offset', params.offset.toString());
+      const where: any = {};
+      if (params.tokenCode) where.tokenCode = params.tokenCode;
+      if (params.status) where.status = params.status;
 
-      const response = await firstValueFrom(
-        this.httpService.get(`${this.n8nBaseUrl}/webhook/shipments?${queryParams.toString()}`),
-      );
-      return response.data;
+      const shipments = await this.prisma.demoShipment.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: params.limit || 50,
+        skip: params.offset || 0,
+      });
+
+      return {
+        success: true,
+        data: shipments,
+        count: shipments.length,
+      };
     } catch (error) {
       this.logger.error('Failed to list shipments', error);
       throw new HttpException(
-        error.response?.data || 'Failed to list shipments',
-        error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to list shipments',
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
 
   async getShipmentById(id: number) {
     try {
-      const response = await firstValueFrom(
-        this.httpService.get(`${this.n8nBaseUrl}/webhook/shipment/${id}`),
-      );
-      return response.data;
+      const shipment = await this.prisma.demoShipment.findUnique({
+        where: { id },
+      });
+
+      if (!shipment) {
+        throw new HttpException('Shipment not found', HttpStatus.NOT_FOUND);
+      }
+
+      const logs = await this.prisma.automationLog.findMany({
+        where: { shipmentId: id },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      });
+
+      return {
+        success: true,
+        shipment,
+        logs,
+      };
     } catch (error) {
+      if (error instanceof HttpException) throw error;
       this.logger.error(`Failed to get shipment ${id}`, error);
       throw new HttpException(
-        error.response?.data || 'Shipment not found',
-        error.response?.status || HttpStatus.NOT_FOUND,
+        'Shipment not found',
+        HttpStatus.NOT_FOUND,
       );
     }
   }
