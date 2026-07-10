@@ -13,6 +13,12 @@ cmds = [
   "cd apps/backend && npm run build"
 ]
 
+# 部署前运行数据库迁移
+[phases.deploy]
+cmds = [
+  "cd packages/database && npx prisma migrate deploy"
+]
+
 [start]
 cmd = "cd apps/backend && node dist/main"
 
