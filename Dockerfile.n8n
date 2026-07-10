@@ -1,23 +1,28 @@
 FROM n8nio/n8n:latest
 
+# 切换到 root 用户以便有权限操作
+USER root
+
+# 创建工作目录
+RUN mkdir -p /home/node/.n8n/workflows && chown -R node:node /home/node/.n8n
+
+# 复制 workflow 配置文件
+COPY --chown=node:node docs/n8n-workflows/*.json /home/node/.n8n/workflows/
+
+# 切换回 node 用户
+USER node
+
 # 设置工作目录
 WORKDIR /home/node
 
-# 复制 workflow 配置文件
-COPY docs/n8n-workflows /home/node/.n8n/workflows
-
-# 设置必要的环境变量（从 Railway 环境变量中读取）
-ENV N8N_HOST=${N8N_HOST}
-ENV N8N_PORT=5678
+# 环境变量（Railway 会注入真实值）
+# Railway 会自动设置 PORT 环境变量，n8n 需要读取它
+ENV N8N_PORT=${PORT:-5678}
 ENV N8N_PROTOCOL=https
-ENV WEBHOOK_URL=${WEBHOOK_URL}
-ENV VUE_APP_URL_BASE_API=${VUE_APP_URL_BASE_API}
 ENV N8N_BASIC_AUTH_ACTIVE=true
-ENV N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER}
-ENV N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD}
 
-# 暴露端口
-EXPOSE 5678
+# 暴露端口（Railway 会动态分配）
+EXPOSE ${PORT:-5678}
 
-# 启动 n8n
-CMD ["n8n", "start"]
+# 启动 n8n，使用 Railway 的 PORT 环境变量
+CMD n8n start --tunnel
