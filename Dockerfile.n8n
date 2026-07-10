@@ -1,28 +1,12 @@
 FROM n8nio/n8n:latest
 
-# 切换到 root 用户以便有权限操作
-USER root
-
-# 创建工作目录
-RUN mkdir -p /home/node/.n8n/workflows && chown -R node:node /home/node/.n8n
-
-# 复制 workflow 配置文件
-COPY --chown=node:node docs/n8n-workflows/*.json /home/node/.n8n/workflows/
-
-# 切换回 node 用户
-USER node
-
-# 设置工作目录
-WORKDIR /home/node
-
-# 环境变量（Railway 会注入真实值）
-# Railway 会自动设置 PORT 环境变量，n8n 需要读取它
-ENV N8N_PORT=${PORT:-5678}
+# 设置环境变量
+ENV N8N_PORT=5678
 ENV N8N_PROTOCOL=https
 ENV N8N_BASIC_AUTH_ACTIVE=true
 
-# 暴露端口（Railway 会动态分配）
-EXPOSE ${PORT:-5678}
+# 暴露端口
+EXPOSE 5678
 
-# 启动 n8n，使用 Railway 的 PORT 环境变量
-CMD n8n start --tunnel
+# 使用官方镜像的默认启动方式
+# n8n 官方镜像已经配置好了 ENTRYPOINT 和 CMD
