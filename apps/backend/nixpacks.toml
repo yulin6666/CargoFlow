@@ -10,12 +10,11 @@ cmds = [
 [phases.build]
 cmds = [
   "cd packages/database && npx prisma generate",
-  "cd packages/database && npx prisma migrate deploy",
   "cd apps/backend && npm run build"
 ]
 
 [start]
-cmd = "cd apps/backend && node dist/main"
+cmd = "sh apps/backend/start.sh"
 
 [env]
 NODE_ENV = "production"
