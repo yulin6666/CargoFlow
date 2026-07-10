@@ -23,7 +23,7 @@ export class ShipmentsService {
         this.httpService.post(`${this.n8nBaseUrl}/webhook/generate-quote`, createQuoteDto),
       );
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to create quote', error);
       throw new HttpException(
         error.response?.data || 'Failed to create quote',
@@ -41,7 +41,7 @@ export class ShipmentsService {
         }),
       );
       return response.data;
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to purchase label', error);
       throw new HttpException(
         error.response?.data || 'Failed to purchase label',
@@ -73,8 +73,8 @@ export class ShipmentsService {
           },
         }),
       );
-      return { success: true, message: '模拟支付成功', ...response.data };
-    } catch (error) {
+      return { success: true, message: 'Mock payment successful', ...response.data };
+    } catch (error: any) {
       this.logger.error('Failed to trigger mock payment', error);
       throw new HttpException(
         error.response?.data || 'Failed to mock payment',
@@ -106,7 +106,7 @@ export class ShipmentsService {
         data: shipments,
         count: shipments.length,
       };
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error('Failed to list shipments', error);
       throw new HttpException(
         'Failed to list shipments',
@@ -136,7 +136,7 @@ export class ShipmentsService {
         shipment,
         logs,
       };
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof HttpException) throw error;
       this.logger.error(`Failed to get shipment ${id}`, error);
       throw new HttpException(
@@ -150,7 +150,7 @@ export class ShipmentsService {
     try {
       const shipmentData = await this.getShipmentById(id);
       return { success: true, logs: shipmentData.logs || [] };
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`Failed to get logs for shipment ${id}`, error);
       throw new HttpException(
         error.response?.data || 'Failed to get shipment logs',
@@ -188,8 +188,8 @@ export class ShipmentsService {
       );
       this.logger.log(`n8n webhook response: ${JSON.stringify(response.data)}`);
 
-      return { success: true, message: `模拟 ${status} webhook 已发送`, webhookResponse: response.data };
-    } catch (error) {
+      return { success: true, message: `Simulated ${status} webhook sent`, webhookResponse: response.data };
+    } catch (error: any) {
       this.logger.error(`Failed to simulate tracking update for shipment ${shipmentId}`, error);
       throw new HttpException(
         error.response?.data || 'Failed to simulate tracking update',

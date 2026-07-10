@@ -28,7 +28,7 @@ export class QuotesService {
     );
 
     try {
-      // 调用 n8n webhook
+      // Call n8n webhook
       const n8nUrl = `${this.n8nWebhookBase}/webhook/generate-quote`;
       this.logger.debug(`Calling n8n webhook: ${n8nUrl}`);
 
@@ -38,7 +38,7 @@ export class QuotesService {
 
       this.logger.log(`n8n response: ${JSON.stringify(response.data)}`);
 
-      // 检查响应是否为空
+      // Check if response is empty
       if (!response.data || Object.keys(response.data).length === 0) {
         throw new Error('n8n returned empty response');
       }
@@ -47,7 +47,7 @@ export class QuotesService {
     } catch (error) {
       this.logger.error(`Failed to create quote: ${error.message}`);
 
-      // 如果 n8n 调用失败，返回 fallback 响应
+      // If n8n call fails, return fallback response
       this.logger.warn('n8n webhook failed, creating local record');
 
       const shipment = await prisma.demoShipment.create({

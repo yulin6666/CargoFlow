@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-// ---- 类型定义 ----
+// ---- Type definitions ----
 
 interface Rate {
   rateId: string;
@@ -53,27 +53,27 @@ interface AutomationLog {
   createdAt: string;
 }
 
-// ---- 状态配置 ----
+// ---- Status config ----
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  draft:            { label: '待支付', color: 'text-yellow-700', bg: 'bg-yellow-100' },
-  pending_payment:  { label: '支付中', color: 'text-orange-700', bg: 'bg-orange-100' },
-  paid:             { label: '已支付', color: 'text-blue-700',   bg: 'bg-blue-100'   },
-  label_purchased:  { label: '已出单', color: 'text-purple-700', bg: 'bg-purple-100' },
-  in_transit:       { label: '运输中', color: 'text-indigo-700', bg: 'bg-indigo-100' },
-  delivered:        { label: '已送达', color: 'text-green-700',  bg: 'bg-green-100'  },
+  draft:            { label: 'Pending Payment', color: 'text-yellow-700', bg: 'bg-yellow-100' },
+  pending_payment:  { label: 'Processing',      color: 'text-orange-700', bg: 'bg-orange-100' },
+  paid:             { label: 'Paid',             color: 'text-blue-700',   bg: 'bg-blue-100'   },
+  label_purchased:  { label: 'Label Purchased',  color: 'text-purple-700', bg: 'bg-purple-100' },
+  in_transit:       { label: 'In Transit',       color: 'text-indigo-700', bg: 'bg-indigo-100' },
+  delivered:        { label: 'Delivered',        color: 'text-green-700',  bg: 'bg-green-100'  },
 };
 
 const LOG_CONFIG: Record<string, { icon: string; label: string }> = {
-  label_purchased:          { icon: '🏷️', label: 'Label 已购买' },
-  tracking_updated:         { icon: '📡', label: '追踪状态更新' },
-  notification_in_transit:  { icon: '🚚', label: '运输通知' },
-  notification_delivered:   { icon: '✅', label: '送达通知' },
-  payment_succeeded:        { icon: '💳', label: '支付成功' },
-  email_payment_confirmation: { icon: '📧', label: '确认邮件' },
+  label_purchased:            { icon: '🏷️', label: 'Label Purchased' },
+  tracking_updated:           { icon: '📡', label: 'Tracking Updated' },
+  notification_in_transit:    { icon: '🚚', label: 'In Transit Notification' },
+  notification_delivered:     { icon: '✅', label: 'Delivered Notification' },
+  payment_succeeded:          { icon: '💳', label: 'Payment Succeeded' },
+  email_payment_confirmation: { icon: '📧', label: 'Confirmation Email' },
 };
 
-// ---- 子组件 ----
+// ---- Components ----
 
 function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_CONFIG[status] || { label: status, color: 'text-gray-700', bg: 'bg-gray-100' };
@@ -86,7 +86,7 @@ function StatusBadge({ status }: { status: string }) {
 
 function LogItem({ log }: { log: AutomationLog }) {
   const cfg = LOG_CONFIG[log.actionType] || { icon: '⚡', label: log.actionType };
-  const time = new Date(log.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const time = new Date(log.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const details = log.details as Record<string, string | number>;
   const detailStr = details?.tracking_number ? `Tracking: ${details.tracking_number}` :
                     details?.message ? String(details.message) :
@@ -97,7 +97,7 @@ function LogItem({ log }: { log: AutomationLog }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium text-gray-800">{cfg.label}</span>
-          {!log.success && <span className="text-xs text-red-500">失败</span>}
+          {!log.success && <span className="text-xs text-red-500">Failed</span>}
         </div>
         {detailStr && <p className="text-xs text-gray-500 mt-0.5 truncate">{detailStr}</p>}
       </div>
@@ -143,7 +143,7 @@ function ShipmentCard({
         <div className="flex items-center gap-3 text-sm text-gray-600 mb-3">
           <span className="font-semibold text-gray-900">${shipment.quoteAmount}</span>
           {shipment.carrier && <span>{shipment.carrier} {shipment.serviceName}</span>}
-          {shipment.estimatedDays && <span className="text-gray-400">{shipment.estimatedDays}天</span>}
+          {shipment.estimatedDays && <span className="text-gray-400">{shipment.estimatedDays} days</span>}
         </div>
       )}
 
@@ -155,7 +155,7 @@ function ShipmentCard({
             <a href={shipment.trackingUrl} target="_blank" rel="noopener noreferrer"
                className="text-xs text-blue-500 hover:underline shrink-0"
                onClick={e => e.stopPropagation()}>
-              追踪 →
+              Track →
             </a>
           )}
         </div>
@@ -166,7 +166,7 @@ function ShipmentCard({
           <a href={shipment.labelUrl} target="_blank" rel="noopener noreferrer"
              className="text-xs text-blue-600 hover:underline flex items-center gap-1"
              onClick={e => e.stopPropagation()}>
-            📄 下载 Label
+            📄 Download Label
           </a>
         )}
 
@@ -175,7 +175,7 @@ function ShipmentCard({
             className="ml-auto text-xs bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition-colors"
             onClick={e => { e.stopPropagation(); onCheckout(shipment.id); }}
           >
-            ✅ 模拟支付
+            ✅ Mock Payment
           </button>
         )}
 
@@ -184,7 +184,7 @@ function ShipmentCard({
             className="text-xs bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700 transition-colors"
             onClick={e => { e.stopPropagation(); onPurchaseLabel(shipment.id); }}
           >
-            购买运单
+            Purchase Label
           </button>
         )}
 
@@ -194,48 +194,48 @@ function ShipmentCard({
               className="text-xs bg-orange-500 text-white px-2 py-1 rounded hover:bg-orange-600 transition-colors"
               onClick={e => { e.stopPropagation(); onSimulateTracking(shipment.id, 'TRANSIT', shipment.trackingNumber!); }}
             >
-              🚚 模拟运输中
+              🚚 Simulate Transit
             </button>
             <button
               className="text-xs bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600 transition-colors"
               onClick={e => { e.stopPropagation(); onSimulateTracking(shipment.id, 'DELIVERED', shipment.trackingNumber!); }}
             >
-              📦 模拟送达
+              📦 Simulate Delivered
             </button>
           </>
         )}
       </div>
 
       <div className="text-xs text-gray-400 mt-2">
-        {new Date(shipment.createdAt).toLocaleString('zh-CN')}
+        {new Date(shipment.createdAt).toLocaleString('en-US')}
       </div>
     </div>
   );
 }
 
-// ---- 主页面 ----
+// ---- Main Page ----
 
 export default function Home() {
   const [tab, setTab] = useState<'quote' | 'orders' | 'logs'>('quote');
 
-  // 报价表单
+  // Quote form
   const [form, setForm] = useState({ fromAddress: 'Chicago', toAddress: 'New York', weight: '10', senderName: 'John Smith', senderPhone: '6505550100', senderEmail: 'linyubupt@gmail.com' });
   const [quoting, setQuoting] = useState(false);
   const [quoteResult, setQuoteResult] = useState<QuoteResult | null>(null);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [selectedRateId, setSelectedRateId] = useState<string | null>(null);
 
-  // 订单列表
+  // Orders list
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loadingShipments, setLoadingShipments] = useState(false);
   const [selectedShipmentId, setSelectedShipmentId] = useState<number | null>(null);
   const [selectedShipmentLogs, setSelectedShipmentLogs] = useState<AutomationLog[]>([]);
 
-  // 购买 label
+  // Purchase label
   const [purchasingId, setPurchasingId] = useState<number | null>(null);
   const [checkingOutId, setCheckingOutId] = useState<number | null>(null);
 
-  // 全局日志
+  // Global logs
   const [allLogs, setAllLogs] = useState<AutomationLog[]>([]);
 
   const fetchShipments = useCallback(async () => {
@@ -265,7 +265,7 @@ export default function Home() {
   }, []);
 
   const fetchAllLogs = useCallback(async () => {
-    // 从最近的订单汇总日志
+    // Aggregate logs from recent orders
     if (shipments.length === 0) return;
     const logs: AutomationLog[] = [];
     for (const s of shipments.slice(0, 5)) {
@@ -308,10 +308,10 @@ export default function Home() {
         setQuoteResult(data);
         setSelectedRateId(data.allRates?.[0]?.rateId || null);
       } else {
-        setQuoteError(data.message || '报价失败');
+        setQuoteError(data.message || 'Quote failed');
       }
     } catch (err: unknown) {
-      setQuoteError(err instanceof Error ? err.message : '请求失败');
+      setQuoteError(err instanceof Error ? err.message : 'Request failed');
     } finally {
       setQuoting(false);
     }
@@ -329,19 +329,18 @@ export default function Home() {
       });
       const data = await res.json();
       if (data.success) {
-        // 成功后刷新
         if (tab === 'orders') fetchShipments();
         if (quoteResult?.shipmentId === shipmentId) {
           setQuoteResult(null);
           setTab('orders');
           setTimeout(fetchShipments, 500);
         }
-        alert(`✅ 购买成功！\nTracking: ${data.trackingNumber}`);
+        alert(`✅ Purchase successful!\nTracking: ${data.trackingNumber}`);
       } else {
-        alert(`❌ 购买失败: ${data.message || JSON.stringify(data)}`);
+        alert(`❌ Purchase failed: ${data.message || JSON.stringify(data)}`);
       }
     } catch (err: unknown) {
-      alert(`❌ 请求失败: ${err instanceof Error ? err.message : '未知错误'}`);
+      alert(`❌ Request failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setPurchasingId(null);
     }
@@ -357,12 +356,12 @@ export default function Home() {
       const data = await res.json();
       if (data.success) {
         fetchShipments();
-        alert(`✅ 模拟支付成功！订单 #${shipmentId} 已标记为已支付，邮件/HubSpot 自动化已触发。`);
+        alert(`✅ Mock payment successful! Order #${shipmentId} marked as paid.`);
       } else {
-        alert(`❌ 支付失败: ${data.message || JSON.stringify(data)}`);
+        alert(`❌ Payment failed: ${data.message || JSON.stringify(data)}`);
       }
     } catch (err: unknown) {
-      alert(`❌ 请求失败: ${err instanceof Error ? err.message : '未知错误'}`);
+      alert(`❌ Request failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setCheckingOutId(null);
     }
@@ -382,12 +381,12 @@ export default function Home() {
         if (selectedShipmentId === shipmentId) {
           fetchShipmentDetail(shipmentId);
         }
-        alert(`✅ 模拟 ${status} webhook 已发送！邮件通知应已触发。`);
+        alert(`✅ Simulated ${status} webhook sent!`);
       } else {
-        alert(`❌ 模拟失败: ${data.message || JSON.stringify(data)}`);
+        alert(`❌ Simulation failed: ${data.message || JSON.stringify(data)}`);
       }
     } catch (err: unknown) {
-      alert(`❌ 请求失败: ${err instanceof Error ? err.message : '未知错误'}`);
+      alert(`❌ Request failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
   };
 
@@ -400,14 +399,14 @@ export default function Home() {
             <span className="text-2xl">🚚</span>
             <div>
               <h1 className="text-xl font-bold text-gray-900">CargoFlow</h1>
-              <p className="text-xs text-gray-500">物流自动化演示系统</p>
+              <p className="text-xs text-gray-500">Logistics Automation Demo</p>
             </div>
           </div>
           <div className="flex gap-1">
             {([
-              ['quote', '📦 报价'],
-              ['orders', '📋 订单'],
-              ['logs', '📊 日志'],
+              ['quote', '📦 Quote'],
+              ['orders', '📋 Orders'],
+              ['logs', '📊 Logs'],
             ] as [string, string][]).map(([key, label]) => (
               <button
                 key={key}
@@ -427,15 +426,15 @@ export default function Home() {
 
       <main className="max-w-6xl mx-auto px-6 py-8">
 
-        {/* ---- 报价 Tab ---- */}
+        {/* ---- Quote Tab ---- */}
         {tab === 'quote' && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* 表单 */}
+            {/* Form */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-5">创建报价</h2>
+              <h2 className="text-lg font-semibold text-gray-900 mb-5">Create Quote</h2>
               <form onSubmit={handleQuote} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">起运地</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Origin</label>
                   <input
                     type="text"
                     value={form.fromAddress}
@@ -446,7 +445,7 @@ export default function Home() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">目的地</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Destination</label>
                   <input
                     type="text"
                     value={form.toAddress}
@@ -457,7 +456,7 @@ export default function Home() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">重量 (lbs)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Weight (lbs)</label>
                   <input
                     type="number"
                     value={form.weight}
@@ -472,31 +471,31 @@ export default function Home() {
                 </div>
 
                 <div className="border-t border-gray-100 pt-4">
-                  <p className="text-xs text-gray-500 font-medium mb-3">发件人联系方式（USPS 必填）</p>
+                  <p className="text-xs text-gray-500 font-medium mb-3">Sender Info (required for USPS)</p>
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">姓名</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
                       <input
                         type="text"
                         value={form.senderName}
                         onChange={e => setForm({ ...form, senderName: e.target.value })}
-                        placeholder="发件人姓名"
+                        placeholder="Sender name"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">手机号 <span className="text-red-500">*</span></label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Phone <span className="text-red-500">*</span></label>
                       <input
                         type="tel"
                         value={form.senderPhone}
                         onChange={e => setForm({ ...form, senderPhone: e.target.value })}
-                        placeholder="例如: 6505550100"
+                        placeholder="e.g. 6505550100"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                         required
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">邮箱 <span className="text-red-500">*</span></label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Email <span className="text-red-500">*</span></label>
                       <input
                         type="email"
                         value={form.senderEmail}
@@ -513,24 +512,24 @@ export default function Home() {
                   disabled={quoting}
                   className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-medium text-sm hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                 >
-                  {quoting ? '获取报价中...' : '获取 Shippo 实时报价'}
+                  {quoting ? 'Getting quote...' : 'Get Shippo Live Quote'}
                 </button>
               </form>
 
-              {/* 支持城市提示 */}
+              {/* Supported cities */}
               <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                <p className="text-xs text-gray-500 font-medium mb-1">支持城市</p>
+                <p className="text-xs text-gray-500 font-medium mb-1">Supported Cities</p>
                 <p className="text-xs text-gray-400 leading-relaxed">
                   New York · Los Angeles · Chicago · Houston · Phoenix · San Francisco · Seattle · Miami · Dallas · Boston
                 </p>
               </div>
             </div>
 
-            {/* 报价结果 */}
+            {/* Quote result */}
             <div>
               {quoteError && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-5">
-                  <p className="text-sm font-medium text-red-800 mb-1">报价失败</p>
+                  <p className="text-sm font-medium text-red-800 mb-1">Quote Failed</p>
                   <p className="text-sm text-red-600">{quoteError}</p>
                 </div>
               )}
@@ -538,8 +537,8 @@ export default function Home() {
               {quoteResult && (
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-semibold text-gray-900">报价结果</h2>
-                    <span className="text-xs text-gray-400 font-mono">订单 #{quoteResult.shipmentId}</span>
+                    <h2 className="text-lg font-semibold text-gray-900">Quote Results</h2>
+                    <span className="text-xs text-gray-400 font-mono">Order #{quoteResult.shipmentId}</span>
                   </div>
 
                   <div className="space-y-2 mb-5">
@@ -565,7 +564,7 @@ export default function Home() {
                             <span className="text-sm font-medium text-gray-800">{rate.carrier}</span>
                             <span className="text-xs text-gray-500">{rate.service}</span>
                           </div>
-                          <div className="text-xs text-gray-400">{rate.estimatedDays} 天送达</div>
+                          <div className="text-xs text-gray-400">{rate.estimatedDays} day delivery</div>
                         </div>
                         <span className="text-base font-bold text-gray-900">${rate.amount}</span>
                       </label>
@@ -577,7 +576,7 @@ export default function Home() {
                     onClick={() => handlePurchaseLabel(quoteResult.shipmentId, selectedRateId!)}
                     className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium text-sm hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                   >
-                    {purchasingId === quoteResult.shipmentId ? '购买中...' : '确认购买运单'}
+                    {purchasingId === quoteResult.shipmentId ? 'Purchasing...' : 'Confirm Purchase'}
                   </button>
                 </div>
               )}
@@ -585,22 +584,22 @@ export default function Home() {
               {!quoteResult && !quoteError && !quoting && (
                 <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400">
                   <div className="text-4xl mb-3">📦</div>
-                  <p className="text-sm">填写表单获取实时运费报价</p>
-                  <p className="text-xs mt-1 text-gray-300">由 Shippo API 提供多承运商比价</p>
+                  <p className="text-sm">Fill in the form to get a live shipping quote</p>
+                  <p className="text-xs mt-1 text-gray-300">Multi-carrier rates powered by Shippo API</p>
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* ---- 订单 Tab ---- */}
+        {/* ---- Orders Tab ---- */}
         {tab === 'orders' && (
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-            {/* 订单列表 */}
+            {/* Orders list */}
             <div className="lg:col-span-3">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-gray-900">
-                  订单列表
+                  Orders
                   {shipments.length > 0 && (
                     <span className="ml-2 text-sm font-normal text-gray-400">({shipments.length})</span>
                   )}
@@ -609,21 +608,21 @@ export default function Home() {
                   onClick={fetchShipments}
                   className="text-sm text-blue-600 hover:underline flex items-center gap-1"
                 >
-                  {loadingShipments ? '刷新中...' : '↻ 刷新'}
+                  {loadingShipments ? 'Refreshing...' : '↻ Refresh'}
                 </button>
               </div>
 
               {loadingShipments && shipments.length === 0 ? (
-                <div className="text-center py-12 text-gray-400 text-sm">加载中...</div>
+                <div className="text-center py-12 text-gray-400 text-sm">Loading...</div>
               ) : shipments.length === 0 ? (
                 <div className="text-center py-12 text-gray-400">
                   <div className="text-4xl mb-3">📭</div>
-                  <p className="text-sm">暂无订单</p>
+                  <p className="text-sm">No orders yet</p>
                   <button
                     className="mt-3 text-sm text-blue-600 hover:underline"
                     onClick={() => setTab('quote')}
                   >
-                    去创建第一个报价 →
+                    Create your first quote →
                   </button>
                 </div>
               ) : (
@@ -643,16 +642,16 @@ export default function Home() {
               )}
             </div>
 
-            {/* 订单日志面板 */}
+            {/* Order logs panel */}
             <div className="lg:col-span-2">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                {selectedShipmentId ? `订单 #${selectedShipmentId} 日志` : '自动化日志'}
+                {selectedShipmentId ? `Order #${selectedShipmentId} Logs` : 'Automation Logs'}
               </h2>
               <div className="bg-white rounded-xl border border-gray-200 p-4 min-h-[300px]">
                 {!selectedShipmentId ? (
-                  <p className="text-sm text-gray-400 text-center py-8">点击订单查看日志</p>
+                  <p className="text-sm text-gray-400 text-center py-8">Click an order to view logs</p>
                 ) : selectedShipmentLogs.length === 0 ? (
-                  <p className="text-sm text-gray-400 text-center py-8">暂无日志</p>
+                  <p className="text-sm text-gray-400 text-center py-8">No logs yet</p>
                 ) : (
                   <div>
                     {selectedShipmentLogs.map((log, i) => (
@@ -665,24 +664,24 @@ export default function Home() {
           </div>
         )}
 
-        {/* ---- 日志 Tab ---- */}
+        {/* ---- Logs Tab ---- */}
         {tab === 'logs' && (
           <div>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">自动化日志</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Automation Logs</h2>
               <button
                 onClick={fetchAllLogs}
                 className="text-sm text-blue-600 hover:underline"
               >
-                ↻ 刷新
+                ↻ Refresh
               </button>
             </div>
             <div className="bg-white rounded-xl border border-gray-200 p-5">
               {allLogs.length === 0 ? (
                 <div className="text-center py-12 text-gray-400">
                   <div className="text-4xl mb-3">📊</div>
-                  <p className="text-sm">暂无日志记录</p>
-                  <p className="text-xs mt-1 text-gray-300">完成报价和购买运单后，日志会在此显示</p>
+                  <p className="text-sm">No logs yet</p>
+                  <p className="text-xs mt-1 text-gray-300">Logs will appear here after completing a quote and purchase</p>
                 </div>
               ) : (
                 <div>

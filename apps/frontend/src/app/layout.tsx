@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CargoFlow - 物流自动化 Demo",
-  description: "基于 n8n + AI 的物流自动化演示系统",
+  title: "CargoFlow - Logistics Automation Demo",
+  description: "Logistics automation demo system powered by n8n + AI",
 };
 
 export default function RootLayout({
@@ -12,7 +12,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN">
+    <html lang="en">
       <body className="antialiased bg-gray-50">
         {children}
       </body>
