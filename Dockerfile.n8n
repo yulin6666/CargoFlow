@@ -1,12 +1,13 @@
 FROM n8nio/n8n:latest
 
-# 设置环境变量
+# 基础配置
 ENV N8N_PORT=5678
 ENV N8N_PROTOCOL=https
-ENV N8N_BASIC_AUTH_ACTIVE=true
+
+# 数据库配置（实际值通过 Railway Variables 注入）
+ENV DB_TYPE=postgresdb
 
 # 暴露端口
 EXPOSE 5678
 
-# 使用官方镜像的默认启动方式
-# n8n 官方镜像已经配置好了 ENTRYPOINT 和 CMD
+# 使用官方镜像默认启动
