@@ -45,6 +45,7 @@ model DemoShipment {
   carrier          String?   @db.VarChar(50)
   serviceName      String?   @map("service_name") @db.VarChar(100)
   estimatedDays    Int?      @map("estimated_days")
+  aiRecommendation String?   @map("ai_recommendation") @db.Text
   paidAt           DateTime? @map("paid_at")
   stripePaymentId  String?   @map("stripe_payment_id") @db.VarChar(100)
   createdAt        DateTime  @default(now()) @map("created_at")

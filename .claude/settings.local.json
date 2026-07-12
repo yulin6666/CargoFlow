@@ -51,7 +51,11 @@
       "Bash(/Users/lindediannao/Documents/project/CargoFlow/.env.example:*)",
       "Bash(/Users/lindediannao/Documents/project/CargoFlow/README.md:*)",
       "Bash(/Users/lindediannao/Documents/project/CargoFlow/CHANGES.md:*)",
-      "Skill(last30days)"
+      "Skill(last30days)",
+      "Bash(/Users/lindediannao/Documents/project/CargoFlow/docs/IMPLEMENTATION_SUMMARY.md:*)",
+      "Bash(git:*)",
+      "Bash(/tmp/completion_summary.txt:*)",
+      "Read(//tmp/**)"
     ]
   }
 }

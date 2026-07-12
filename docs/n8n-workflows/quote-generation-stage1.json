@@ -12,10 +12,7 @@
       "name": "Webhook",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1.1,
-      "position": [
-        240,
-        300
-      ],
+      "position": [240, 300],
       "webhookId": "generate-quote"
     },
     {
@@ -26,10 +23,7 @@
       "name": "Prepare Shippo Request",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        460,
-        300
-      ]
+      "position": [460, 300]
     },
     {
       "parameters": {
@@ -56,10 +50,7 @@
       "name": "Shippo - Create Shipment",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        680,
-        300
-      ],
+      "position": [680, 300],
       "credentials": {
         "httpHeaderAuth": {
           "id": "shippo-token-credentials",
@@ -75,25 +66,59 @@
       "name": "Parse Shippo Rates",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        900,
-        300
-      ]
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ '你是一个物流专家，请根据以下运输方案的价格、时效和承运商可靠性，推荐最佳方案并说明原因。请用简洁的中文回复，不超过50字。\\n\\n可用方案：\\n' + JSON.stringify($json.allRates) }}"
+      },
+      "id": "ai-recommendation",
+      "name": "AI Carrier Recommendation",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.4,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "model": "qwen/qwen-2.5-72b-instruct",
+        "options": {
+          "baseURL": "https://openrouter.ai/api/v1"
+        }
+      },
+      "id": "openrouter-model",
+      "name": "OpenRouter Qwen",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [1120, 480],
+      "credentials": {
+        "openAiApi": {
+          "id": "openrouter-credentials",
+          "name": "OpenRouter API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const aiResponse = $input.first().json;\nconst ratesData = $('Parse Shippo Rates').first().json;\n\n// Basic LLM Chain outputs { output: '...' }\nlet aiRecommendation = '';\ntry {\n  aiRecommendation = (aiResponse.output || aiResponse.text || '').trim();\n} catch (e) {\n  aiRecommendation = '推荐选择价格最优且时效较快的承运商';\n}\n\nif (!aiRecommendation) {\n  aiRecommendation = '推荐选择价格最优且时效较快的承运商';\n}\n\nreturn {\n  ...ratesData,\n  aiRecommendation\n};"
+      },
+      "id": "parse-ai-response",
+      "name": "Parse AI Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300]
     },
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO demo_shipments (from_address, to_address, weight, status, quote_amount, shippo_object_id, shippo_rate_id, shippo_rates, sender_name, sender_phone, sender_email, carrier, service_name, estimated_days, created_at, updated_at)\nVALUES ('{{ $json.fromAddress }}', '{{ $json.toAddress }}', {{ $json.weight }}, 'draft', {{ $json.quoteAmount }}, '{{ $json.shippoObjectId }}', '{{ $json.shippoRateId }}', '{{ JSON.stringify($json.allRates) }}'::jsonb, '{{ $json.senderName }}', '{{ $json.senderPhone }}', '{{ $json.senderEmail }}', '{{ $json.carrier }}', '{{ $json.serviceName }}', {{ $json.estimatedDays }}, NOW(), NOW())\nRETURNING *;",
+        "query": "INSERT INTO demo_shipments (from_address, to_address, weight, status, quote_amount, shippo_object_id, shippo_rate_id, shippo_rates, sender_name, sender_phone, sender_email, carrier, service_name, estimated_days, ai_recommendation, created_at, updated_at)\nVALUES ('{{ $json.fromAddress }}', '{{ $json.toAddress }}', {{ $json.weight }}, 'draft', {{ $json.quoteAmount }}, '{{ $json.shippoObjectId }}', '{{ $json.shippoRateId }}', '{{ JSON.stringify($json.allRates) }}'::jsonb, '{{ $json.senderName }}', '{{ $json.senderPhone }}', '{{ $json.senderEmail }}', '{{ $json.carrier }}', '{{ $json.serviceName }}', {{ $json.estimatedDays }}, '{{ $json.aiRecommendation }}', NOW(), NOW())\nRETURNING *;",
         "options": {}
       },
       "id": "postgres-insert",
       "name": "PostgreSQL",
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
-      "position": [
-        1120,
-        300
-      ],
+      "position": [1560, 300],
       "credentials": {
         "postgres": {
           "id": "postgres-credentials",
@@ -103,16 +128,13 @@
     },
     {
       "parameters": {
-        "jsCode": "const dbResult = $input.first().json;\nconst rates = $('Parse Shippo Rates').first().json;\n\nreturn {\n  success: true,\n  shipmentId: dbResult.id,\n  quoteAmount: parseFloat(dbResult.quote_amount),\n  fromAddress: dbResult.from_address,\n  toAddress: dbResult.to_address,\n  weight: parseFloat(dbResult.weight),\n  status: dbResult.status,\n  shippoObjectId: dbResult.shippo_object_id,\n  carrier: rates.carrier,\n  serviceName: rates.serviceName,\n  estimatedDays: rates.estimatedDays,\n  allRates: rates.allRates,\n  message: `报价已生成：${rates.carrier} ${rates.serviceName}，$${rates.quoteAmount}，预计 ${rates.estimatedDays} 天`,\n  createdAt: dbResult.created_at\n};"
+        "jsCode": "const dbResult = $input.first().json;\nconst rates = $('Parse AI Response').first().json;\n\nreturn {\n  success: true,\n  shipmentId: dbResult.id,\n  quoteAmount: parseFloat(dbResult.quote_amount),\n  fromAddress: dbResult.from_address,\n  toAddress: dbResult.to_address,\n  weight: parseFloat(dbResult.weight),\n  status: dbResult.status,\n  shippoObjectId: dbResult.shippo_object_id,\n  carrier: rates.carrier,\n  serviceName: rates.serviceName,\n  estimatedDays: rates.estimatedDays,\n  allRates: rates.allRates,\n  aiRecommendation: dbResult.ai_recommendation || rates.aiRecommendation || '',\n  message: `报价已生成：${rates.carrier} ${rates.serviceName}，$${rates.quoteAmount}，预计 ${rates.estimatedDays} 天`,\n  createdAt: dbResult.created_at\n};"
       },
       "id": "format-response",
       "name": "Format Response",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        1340,
-        300
-      ]
+      "position": [1780, 300]
     },
     {
       "parameters": {
@@ -124,78 +146,36 @@
       "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [
-        1560,
-        300
-      ]
+      "position": [2000, 300]
     }
   ],
   "connections": {
     "Webhook": {
-      "main": [
-        [
-          {
-            "node": "Prepare Shippo Request",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Prepare Shippo Request", "type": "main", "index": 0 }]]
     },
     "Prepare Shippo Request": {
-      "main": [
-        [
-          {
-            "node": "Shippo - Create Shipment",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Shippo - Create Shipment", "type": "main", "index": 0 }]]
     },
     "Shippo - Create Shipment": {
-      "main": [
-        [
-          {
-            "node": "Parse Shippo Rates",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Parse Shippo Rates", "type": "main", "index": 0 }]]
     },
     "Parse Shippo Rates": {
-      "main": [
-        [
-          {
-            "node": "PostgreSQL",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "AI Carrier Recommendation", "type": "main", "index": 0 }]]
+    },
+    "OpenRouter Qwen": {
+      "ai_languageModel": [[{ "node": "AI Carrier Recommendation", "type": "ai_languageModel", "index": 0 }]]
+    },
+    "AI Carrier Recommendation": {
+      "main": [[{ "node": "Parse AI Response", "type": "main", "index": 0 }]]
+    },
+    "Parse AI Response": {
+      "main": [[{ "node": "PostgreSQL", "type": "main", "index": 0 }]]
     },
     "PostgreSQL": {
-      "main": [
-        [
-          {
-            "node": "Format Response",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Format Response", "type": "main", "index": 0 }]]
     },
     "Format Response": {
-      "main": [
-        [
-          {
-            "node": "Respond to Webhook",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Respond to Webhook", "type": "main", "index": 0 }]]
     }
   },
   "pinData": {},
@@ -205,6 +185,6 @@
   "staticData": null,
   "tags": [],
   "triggerCount": 0,
-  "updatedAt": "2026-07-04T00:00:00.000Z",
-  "versionId": "2"
+  "updatedAt": "2026-07-12T00:00:00.000Z",
+  "versionId": "3"
 }

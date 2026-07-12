@@ -25,6 +25,7 @@ interface QuoteResult {
   allRates: Rate[];
   shippoObjectId: string;
   message: string;
+  aiRecommendation?: string;
 }
 
 interface Shipment {
@@ -41,6 +42,7 @@ interface Shipment {
   carrier: string | null;
   serviceName: string | null;
   estimatedDays: number | null;
+  aiRecommendation: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -144,6 +146,13 @@ function ShipmentCard({
           <span className="font-semibold text-gray-900">${shipment.quoteAmount}</span>
           {shipment.carrier && <span>{shipment.carrier} {shipment.serviceName}</span>}
           {shipment.estimatedDays && <span className="text-gray-400">{shipment.estimatedDays} days</span>}
+        </div>
+      )}
+
+      {shipment.aiRecommendation && (
+        <div className="mb-3 p-2.5 bg-blue-50 border border-blue-100 rounded text-xs text-gray-700 flex items-start gap-2">
+          <span className="shrink-0">🤖</span>
+          <span className="flex-1">{shipment.aiRecommendation}</span>
         </div>
       )}
 
@@ -540,6 +549,18 @@ export default function Home() {
                     <h2 className="text-lg font-semibold text-gray-900">Quote Results</h2>
                     <span className="text-xs text-gray-400 font-mono">Order #{quoteResult.shipmentId}</span>
                   </div>
+
+                  {quoteResult.aiRecommendation && (
+                    <div className="mb-5 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl shrink-0">🤖</span>
+                        <div>
+                          <p className="text-xs font-semibold text-blue-900 mb-1">AI 智能推荐</p>
+                          <p className="text-sm text-gray-700 leading-relaxed">{quoteResult.aiRecommendation}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="space-y-2 mb-5">
                     {quoteResult.allRates?.map(rate => (
