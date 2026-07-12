@@ -50,7 +50,8 @@
       "Bash(PGPASSWORD=password psql -h localhost -p 5433 -U root -d logistics_demo -c \"SELECT id, carrier, service_name, quote_amount FROM demo_shipments ORDER BY id DESC LIMIT 5;\")",
       "Bash(/Users/lindediannao/Documents/project/CargoFlow/.env.example:*)",
       "Bash(/Users/lindediannao/Documents/project/CargoFlow/README.md:*)",
-      "Bash(/Users/lindediannao/Documents/project/CargoFlow/CHANGES.md:*)"
+      "Bash(/Users/lindediannao/Documents/project/CargoFlow/CHANGES.md:*)",
+      "Skill(last30days)"
     ]
   }
 }
