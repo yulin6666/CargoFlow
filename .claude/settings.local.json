@@ -55,7 +55,8 @@
       "Bash(/Users/lindediannao/Documents/project/CargoFlow/docs/IMPLEMENTATION_SUMMARY.md:*)",
       "Bash(git:*)",
       "Bash(/tmp/completion_summary.txt:*)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(DATABASE_URL=\"postgresql://root:password@localhost:5433/logistics_demo\" npx prisma migrate deploy)"
     ]
   }
 }

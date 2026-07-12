@@ -555,7 +555,7 @@ export default function Home() {
                       <div className="flex items-start gap-3">
                         <span className="text-2xl shrink-0">🤖</span>
                         <div>
-                          <p className="text-xs font-semibold text-blue-900 mb-1">AI 智能推荐</p>
+                          <p className="text-xs font-semibold text-blue-900 mb-1">AI Recommendation</p>
                           <p className="text-sm text-gray-700 leading-relaxed">{quoteResult.aiRecommendation}</p>
                         </div>
                       </div>

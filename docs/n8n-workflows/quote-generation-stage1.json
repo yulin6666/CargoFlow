@@ -71,7 +71,7 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "={{ '你是一个物流专家，请根据以下运输方案的价格、时效和承运商可靠性，推荐最佳方案并说明原因。请用简洁的中文回复，不超过50字。\\n\\n可用方案：\\n' + JSON.stringify($json.allRates) }}"
+        "text": "={{ 'You are a logistics expert. Based on the following shipping options, recommend the best carrier considering price, delivery time, and reliability. Reply concisely in English (under 50 words).\\n\\nAvailable options:\\n' + JSON.stringify($json.allRates) }}"
       },
       "id": "ai-recommendation",
       "name": "AI Carrier Recommendation",
