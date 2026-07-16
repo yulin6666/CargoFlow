@@ -56,7 +56,11 @@
       "Bash(git:*)",
       "Bash(/tmp/completion_summary.txt:*)",
       "Read(//tmp/**)",
-      "Bash(DATABASE_URL=\"postgresql://root:password@localhost:5433/logistics_demo\" npx prisma migrate deploy)"
+      "Bash(DATABASE_URL=\"postgresql://root:password@localhost:5433/logistics_demo\" npx prisma migrate deploy)",
+      "WebFetch(domain:www.gohighlevel.com)",
+      "WebFetch(domain:marketplace.gohighlevel.com)",
+      "WebFetch(domain:leadsflex.com)",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }
