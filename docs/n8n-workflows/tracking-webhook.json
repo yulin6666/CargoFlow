@@ -318,13 +318,41 @@
     },
     {
       "parameters": {
+        "jsCode": "const checkData = $('Check Shipment').first().json;\n\nconst message = `:white_check_mark: *Package Delivered*\\n\\n` +\n  `*Shipment ID:* #${checkData.shipmentId}\\n` +\n  `*Customer:* ${checkData.senderName}\\n` +\n  `*Email:* ${checkData.senderEmail}\\n` +\n  `*Tracking:* ${checkData.trackingNumber}\\n` +\n  `*Status:* DELIVERED`;\n\nreturn { text: message };"
+      },
+      "id": "slack-build-delivered-message",
+      "name": "Slack - Build Delivered Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ text: $json.text }) }}",
+        "options": {
+          "ignoreResponseCode": true
+        }
+      },
+      "id": "slack-send-delivered",
+      "name": "Slack - Send Delivered",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2660, 300]
+    },
+    {
+      "parameters": {
         "jsCode": "const checkData = $('Check Shipment').first().json;\nconst statusMap = { DELIVERED: 'delivered', TRANSIT: 'in-transit', OUT_FOR_DELIVERY: 'out-for-delivery' };\nconst tag = statusMap[checkData.newStatus] || 'tracking-updated';\n\nreturn {\n  email: checkData.senderEmail || '',\n  tag,\n  newStatus: checkData.newStatus,\n  trackingNumber: checkData.trackingNumber\n};"
       },
       "id": "ghl-build-tag-data",
       "name": "GHL - Build Tag Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2440, 200]
+      "position": [2880, 200]
     },
     {
       "parameters": {
@@ -344,7 +372,7 @@
       "name": "GHL - Find Contact",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2660, 200],
+      "position": [3100, 200],
       "credentials": {
         "httpHeaderAuth": {
           "id": "ghl-api-credentials",
@@ -360,7 +388,7 @@
       "name": "GHL - Extract Contact ID",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2880, 200]
+      "position": [3320, 200]
     },
     {
       "parameters": {
@@ -377,7 +405,7 @@
       "name": "GHL - If Contact Found",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [3100, 200]
+      "position": [3540, 200]
     },
     {
       "parameters": {
@@ -402,7 +430,7 @@
       "name": "GHL - Update Tag",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [3320, 200],
+      "position": [3760, 200],
       "credentials": {
         "httpHeaderAuth": {
           "id": "ghl-api-credentials",
@@ -420,7 +448,7 @@
       "name": "Respond Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [3540, 400]
+      "position": [3980, 400]
     }
   ],
   "connections": {
@@ -536,6 +564,28 @@
       ]
     },
     "Log Delivered Notification": {
+      "main": [
+        [
+          {
+            "node": "Slack - Build Delivered Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack - Build Delivered Message": {
+      "main": [
+        [
+          {
+            "node": "Slack - Send Delivered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack - Send Delivered": {
       "main": [
         [
           {

@@ -280,39 +280,23 @@
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "https://services.leadconnectorhq.com/contacts/",
+        "method": "GET",
+        "url": "=https://services.leadconnectorhq.com/contacts/?query={{ encodeURIComponent($json.email) }}&locationId={{ $env.GHL_LOCATION_ID }}",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Version",
-              "value": "2021-07-28"
-            }
+            { "name": "Version", "value": "2021-07-28" }
           ]
         },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ firstName: $json.firstName, lastName: $json.lastName, email: $json.email, phone: $json.phone, locationId: $env.GHL_LOCATION_ID, tags: ['cargoflow-customer', 'label-purchased'], source: 'CargoFlow' }) }}",
-        "options": {
-          "ignoreResponseCode": true
-        }
+        "options": { "ignoreResponseCode": true }
       },
-      "id": "ghl-create-contact",
-      "name": "GHL - Create Contact",
+      "id": "ghl-find-contact",
+      "name": "GHL - Find Contact",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        3100,
-        300
-      ],
+      "position": [3100, 300],
       "credentials": {
         "httpHeaderAuth": {
           "id": "ghl-api-credentials",
@@ -322,16 +306,102 @@
     },
     {
       "parameters": {
-        "jsCode": "const ghlResponse = $input.first().json;\nconst buildData = $('GHL - Build Contact Data').first().json;\n\n// GHL returns contact object on create; on duplicate it may return 400 with existing contact id\nlet contactId = ghlResponse.contact?.id || ghlResponse.id || null;\n\nreturn {\n  contactId,\n  shipmentId: buildData.shipmentId,\n  carrier: buildData.carrier,\n  serviceName: buildData.serviceName,\n  amount: buildData.amount,\n  trackingNumber: buildData.trackingNumber,\n  fromAddress: buildData.fromAddress,\n  toAddress: buildData.toAddress,\n  orderDate: buildData.orderDate\n};"
+        "jsCode": "const searchResult = $input.first().json;\nconst buildData = $('GHL - Build Contact Data').first().json;\nconst existingContact = searchResult.contacts?.[0] || null;\n\nif (existingContact) {\n  return {\n    exists: true,\n    contactId: existingContact.id,\n    buildData\n  };\n} else {\n  return {\n    exists: false,\n    contactId: null,\n    buildData\n  };\n}"
+      },
+      "id": "ghl-check-exists",
+      "name": "GHL - Check If Exists",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3320, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.exists }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "ghl-if-exists",
+      "name": "GHL - If Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3540, 300]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://services.leadconnectorhq.com/contacts/{{ $json.contactId }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Version", "value": "2021-07-28" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ firstName: $json.buildData.firstName, lastName: $json.buildData.lastName, phone: $json.buildData.phone, tags: ['cargoflow-customer', 'label-purchased'] }) }}",
+        "options": { "ignoreResponseCode": true }
+      },
+      "id": "ghl-update-contact",
+      "name": "GHL - Update Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3760, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ghl-api-credentials",
+          "name": "GHL API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://services.leadconnectorhq.com/contacts/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Version", "value": "2021-07-28" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ firstName: $json.buildData.firstName, lastName: $json.buildData.lastName, email: $json.buildData.email, phone: $json.buildData.phone, locationId: $env.GHL_LOCATION_ID, tags: ['cargoflow-customer', 'label-purchased'], source: 'CargoFlow' }) }}",
+        "options": { "ignoreResponseCode": true }
+      },
+      "id": "ghl-create-contact",
+      "name": "GHL - Create Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3760, 400],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ghl-api-credentials",
+          "name": "GHL API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ghlResponse = $input.first().json;\nconst checkData = $('GHL - Check If Exists').first().json;\nconst buildData = checkData.buildData;\n\n// Extract contactId from update or create response\nlet contactId = checkData.contactId || ghlResponse.contact?.id || ghlResponse.id || null;\n\nreturn {\n  contactId,\n  shipmentId: buildData.shipmentId,\n  carrier: buildData.carrier,\n  serviceName: buildData.serviceName,\n  amount: buildData.amount,\n  trackingNumber: buildData.trackingNumber,\n  fromAddress: buildData.fromAddress,\n  toAddress: buildData.toAddress,\n  orderDate: buildData.orderDate\n};"
       },
       "id": "ghl-build-note",
       "name": "GHL - Build Note Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        3320,
-        300
-      ]
+      "position": [3980, 300]
     },
     {
       "parameters": {
@@ -365,7 +435,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3540,
+        4200,
         300
       ],
       "credentials": {
@@ -386,7 +456,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
       "position": [
-        3760,
+        4420,
         300
       ],
       "credentials": {
@@ -398,6 +468,40 @@
     },
     {
       "parameters": {
+        "jsCode": "const ghlData = $('GHL - Build Contact Data').first().json;\nconst transaction = $('Parse Transaction').first().json;\n\nconst message = `:package: *New Order - Label Purchased*\\n\\n` +\n  `*Shipment ID:* #${ghlData.shipmentId}\\n` +\n  `*Customer:* ${ghlData.firstName} ${ghlData.lastName}\\n` +\n  `*Email:* ${ghlData.email}\\n` +\n  `*Route:* ${ghlData.fromAddress} → ${ghlData.toAddress}\\n` +\n  `*Carrier:* ${ghlData.carrier} ${ghlData.serviceName}\\n` +\n  `*Amount:* $${ghlData.amount}\\n` +\n  `*Tracking:* ${transaction.trackingNumber}`;\n\nreturn { text: message };"
+      },
+      "id": "slack-build-message",
+      "name": "Slack - Build Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ text: $json.text }) }}",
+        "options": {
+          "ignoreResponseCode": true
+        }
+      },
+      "id": "slack-send-notification",
+      "name": "Slack - Send Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4860,
+        300
+      ]
+    },
+    {
+      "parameters": {
         "jsCode": "const shipment = $('Update Shipment').first().json;\nconst transaction = $('Parse Transaction').first().json;\n\nreturn {\n  success: true,\n  shipmentId: shipment.id,\n  status: shipment.status,\n  trackingNumber: transaction.trackingNumber,\n  labelUrl: transaction.labelUrl,\n  trackingUrl: transaction.trackingUrl,\n  carrier: transaction.carrier,\n  serviceName: transaction.serviceName,\n  message: `Label purchased successfully. Tracking: ${transaction.trackingNumber}`\n};"
       },
       "id": "format-response",
@@ -405,7 +509,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3980,
+        5080,
         300
       ]
     },
@@ -420,7 +524,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        4200,
+        5300,
         300
       ]
     }
@@ -562,7 +666,58 @@
       "main": [
         [
           {
+            "node": "GHL - Find Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GHL - Find Contact": {
+      "main": [
+        [
+          {
+            "node": "GHL - Check If Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GHL - Check If Exists": {
+      "main": [
+        [
+          {
+            "node": "GHL - If Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GHL - If Exists": {
+      "main": [
+        [
+          {
+            "node": "GHL - Update Contact",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "GHL - Create Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GHL - Update Contact": {
+      "main": [
+        [
+          {
+            "node": "GHL - Build Note Data",
             "type": "main",
             "index": 0
           }
@@ -603,6 +758,28 @@
       ]
     },
     "Log GHL": {
+      "main": [
+        [
+          {
+            "node": "Slack - Build Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack - Build Message": {
+      "main": [
+        [
+          {
+            "node": "Slack - Send Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack - Send Notification": {
       "main": [
         [
           {
