@@ -57,10 +57,10 @@
       "Bash(/tmp/completion_summary.txt:*)",
       "Read(//tmp/**)",
       "Bash(DATABASE_URL=\"postgresql://root:password@localhost:5433/logistics_demo\" npx prisma migrate deploy)",
-      "Bash(pandoc --version)",
-      "Bash(npx --yes md-to-pdf --version)",
-      "Bash(\"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome\" \\\\\n  --headless \\\\\n  --disable-gpu \\\\\n  --no-sandbox \\\\\n  --print-to-pdf=\"/Users/lindediannao/Documents/project/CargoFlow/n8n_project.pdf\" \\\\\n  --print-to-pdf-no-header \\\\\n  \"file:///tmp/n8n_project.html\" 2>&1)",
-      "Bash(\"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome\" --headless --disable-gpu --no-sandbox --print-to-pdf=\"/Users/lindediannao/Documents/project/CargoFlow/n8n_project.pdf\" --print-to-pdf-no-header \"file:///tmp/n8n_project.html\")"
+      "WebFetch(domain:www.gohighlevel.com)",
+      "WebFetch(domain:marketplace.gohighlevel.com)",
+      "WebFetch(domain:leadsflex.com)",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }

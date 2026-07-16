@@ -318,6 +318,128 @@
     },
     {
       "parameters": {
+        "jsCode": "const checkData = $('Check Shipment').first().json;\n\nconst message = `:white_check_mark: *Package Delivered*\\n\\n` +\n  `*Shipment ID:* #${checkData.shipmentId}\\n` +\n  `*Customer:* ${checkData.senderName}\\n` +\n  `*Email:* ${checkData.senderEmail}\\n` +\n  `*Tracking:* ${checkData.trackingNumber}\\n` +\n  `*Status:* DELIVERED`;\n\nreturn { text: message };"
+      },
+      "id": "slack-build-delivered-message",
+      "name": "Slack - Build Delivered Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2440, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SLACK_WEBHOOK_URL }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ text: $json.text }) }}",
+        "options": {
+          "ignoreResponseCode": true
+        }
+      },
+      "id": "slack-send-delivered",
+      "name": "Slack - Send Delivered",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2660, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const checkData = $('Check Shipment').first().json;\nconst statusMap = { DELIVERED: 'delivered', TRANSIT: 'in-transit', OUT_FOR_DELIVERY: 'out-for-delivery' };\nconst tag = statusMap[checkData.newStatus] || 'tracking-updated';\n\nreturn {\n  email: checkData.senderEmail || '',\n  tag,\n  newStatus: checkData.newStatus,\n  trackingNumber: checkData.trackingNumber\n};"
+      },
+      "id": "ghl-build-tag-data",
+      "name": "GHL - Build Tag Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2880, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://services.leadconnectorhq.com/contacts/?query={{ encodeURIComponent($json.email) }}&locationId={{ $env.GHL_LOCATION_ID }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Version", "value": "2021-07-28" }
+          ]
+        },
+        "options": { "ignoreResponseCode": true }
+      },
+      "id": "ghl-find-contact",
+      "name": "GHL - Find Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3100, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ghl-api-credentials",
+          "name": "GHL API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const searchResult = $input.first().json;\nconst tagData = $('GHL - Build Tag Data').first().json;\nconst contactId = searchResult.contacts?.[0]?.id || null;\n\nif (!contactId) {\n  // No contact found, skip tag update gracefully\n  return { skip: true, reason: 'Contact not found for email: ' + tagData.email };\n}\n\nreturn { contactId, tag: tagData.tag, skip: false };"
+      },
+      "id": "ghl-extract-contact-id",
+      "name": "GHL - Extract Contact ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3320, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.skip }}",
+              "value2": false
+            }
+          ]
+        }
+      },
+      "id": "ghl-if-contact-found",
+      "name": "GHL - If Contact Found",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3540, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://services.leadconnectorhq.com/contacts/{{ $json.contactId }}/tags",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Version", "value": "2021-07-28" }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ tags: [$('GHL - Extract Contact ID').first().json.tag] }) }}",
+        "options": { "ignoreResponseCode": true }
+      },
+      "id": "ghl-update-tag",
+      "name": "GHL - Update Tag",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3760, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "ghl-api-credentials",
+          "name": "GHL API"
+        }
+      }
+    },
+    {
+      "parameters": {
         "respondWith": "json",
         "responseBody": "={{ { \"success\": true, \"message\": \"Webhook processed\" } }}",
         "options": {}
@@ -326,10 +448,7 @@
       "name": "Respond Success",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [
-        2440,
-        400
-      ]
+      "position": [3980, 400]
     }
   ],
   "connections": {
@@ -445,6 +564,90 @@
       ]
     },
     "Log Delivered Notification": {
+      "main": [
+        [
+          {
+            "node": "Slack - Build Delivered Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack - Build Delivered Message": {
+      "main": [
+        [
+          {
+            "node": "Slack - Send Delivered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack - Send Delivered": {
+      "main": [
+        [
+          {
+            "node": "GHL - Build Tag Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GHL - Build Tag Data": {
+      "main": [
+        [
+          {
+            "node": "GHL - Find Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GHL - Find Contact": {
+      "main": [
+        [
+          {
+            "node": "GHL - Extract Contact ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GHL - Extract Contact ID": {
+      "main": [
+        [
+          {
+            "node": "GHL - If Contact Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GHL - If Contact Found": {
+      "main": [
+        [
+          {
+            "node": "GHL - Update Tag",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GHL - Update Tag": {
       "main": [
         [
           {
